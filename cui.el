@@ -555,7 +555,7 @@ Used to inject font-locks to `org-font-lock-extra-keywords' variable."
   (nconc (take (1+ pos) list) (list element) (nthcdr (1+ pos) list)))
 
 
-(defun cui--add-ai-font-lock-to-org-keywords ()
+(defun cui--add-cui-font-lock-to-org-keywords ()
   "Hook, that Insert our fontify functions in Org font lock keywords."
   ;; add fontify-ai-subblocks - markdown blocks and tables.
   ;; Put in order to `org-font-lock-keywords': (cui-block--font-lock-fontify-markdown-and-org) (cui-block-tags--font-lock-fontify-links) (cui-block--font-lock-fontify-markdown-blocks)
@@ -674,7 +674,7 @@ Optional argument ARGS is `xref-find-definitions' related arguments."
         (add-hook 'org-ctrl-c-ctrl-c-hook #'cui-ctrl-c-ctrl-c nil 'local)
         (advice-add 'keyboard-quit :before #'cui-keyboard-quit)
         (when cui-fontification-flag
-          (add-hook 'org-font-lock-set-keywords-hook #'cui--add-ai-font-lock-to-org-keywords nil 'local)
+          (add-hook 'org-font-lock-set-keywords-hook #'cui--add-cui-font-lock-to-org-keywords nil 'local)
           (org-set-font-lock-defaults)
           (font-lock-refresh-defaults))
         ;; - activate "ai" block in Org mode
@@ -694,7 +694,7 @@ Optional argument ARGS is `xref-find-definitions' related arguments."
     (remove-hook 'org-ctrl-c-ctrl-c-hook #'cui-ctrl-c-ctrl-c 'local)
     (advice-remove 'keyboard-quit #'cui-keyboard-quit)
     ;; font lock refrash
-    (remove-hook 'org-font-lock-set-keywords-hook #'cui--add-ai-font-lock-to-org-keywords)
+    (remove-hook 'org-font-lock-set-keywords-hook #'cui--add-cui-font-lock-to-org-keywords)
     (org-set-font-lock-defaults)
     (font-lock-refresh-defaults)
     ;; tangle

@@ -66,7 +66,7 @@
 
 ;;; TODO:
 ;; - BUG: shut network process when timer expire - kill buffer, remove callback.
-;; - escape #+end_ai after insert of text in block
+;; - escape #+end_cui after insert of text in block
 ;; - add support for several backends, curl, request.el
 
 ;; -=-= includes

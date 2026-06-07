@@ -369,7 +369,7 @@ Expanded to:
 (org-babel--expand-body (cui-block-get-info)
 #+begin_cui :noweb yes :stream nil :max-tokens 1200 :sys "Be helpful."  :service github :model "openai/gpt-4.1"
 <<initialization>>
-#+end_ai
+#+end_cui
 : -----------------------------------------------------------
 
 #+begin_src elisp :noweb yes :lexical t :results none :exports code :eval yes
@@ -397,12 +397,12 @@ CONTEXT may be one of :tangle, :export or :eval."
 #+NAME: ina
 #+begin_cui
 test
-#+end_ai
+#+end_cui
 
 
 #+begin_cui
 <<ina()>>
-#+end_ai
+#+end_cui
 
 test:
 : (org-babel-expand-noweb-references (list "text" "aa <<ina()>> bb"))

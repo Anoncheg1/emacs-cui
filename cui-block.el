@@ -958,8 +958,8 @@ and content end at the beginin and the end of flat list."
   "Splits the special block by role prompt.
 Execution in not `org-mode' is supported.
 Optional argument ELEMENT should be cui block
-Return line begining positions of first line of content, roles, #+end_ai
-line."
+Return line begining positions of first line of content, roles,
+ #+end_cui line."
   (let* ((element (or element (when (derived-mode-p 'org-mode)
                                 (cui-block-p))))
          (reg (or (when element (cui-block--contents-region element))

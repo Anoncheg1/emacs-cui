@@ -107,13 +107,14 @@ Redefine:
 By default fintified only major markdown elements: “#headers”, quotes, LaTeX, links&tags.
 
 To enable all Org fintifications in cui blocks:
+: (setq org-protecting-blocks (delete "cui" org-protecting-blocks))
 : (setq org-protecting-blocks (delete "ai" org-protecting-blocks))
 : (org-restart-font-lock)
 
 To disable all fontifications:
 : (setopt cui-fontification-flag nil)
 or
-: (advice-add 'cui-block--set-ai-keywords :override (lambda () t))
+: (advice-add 'cui--add-cui-font-lock-to-org-keywords :override (lambda () t))
 
 ** Auto-fill
 To set use custom function or disable auto-fill by setting it to ~nil~:
@@ -183,7 +184,7 @@ If you use https://github.com/Anoncheg1/emacs-indent use this:
 
 (add-hook 'org-mode-hook 'cui-org-mode-hook)
 #+end_src
-* Supported “[AI]:” in-text prefixes
+* Supported “[ROLE]:” chat prefixes
 - SYS-EVERYWHERE
 - SYS - role: system
 - AI - role: assistant
@@ -247,7 +248,7 @@ Example to remove empty lines after LLM answer:
 #+begin_src elisp :results none :exports code :eval no
 (require 'cui-optional) ; for `cui-optional-remove-distant-empty-lines'
 
-(defun my/ai-postprocess (type _content _pos _stream)
+(defun my/cui-postprocess (type _content _pos _stream)
     (when (equal type 'end)
       (save-excursion
         (let* ((context (cui-block-p))
@@ -255,7 +256,7 @@ Example to remove empty lines after LLM answer:
                (con-end (org-element-property :contents-end context)))
           (cui-optional-remove-distant-empty-lines con-beg con-end)))))
 
-(add-hook 'cui-block-after-chat-insertion-hook #'my/ai-postprocess)
+(add-hook 'cui-block-after-chat-insertion-hook #'my/cui-postprocess)
 #+end_src
 
 ** Hooks for for pre-processing of requests to LLM or text of blocks
@@ -311,20 +312,20 @@ Example:
 ,#+NAME: ina
 ,#+begin_cui
 test
-,#+end_ai
+,#+end_cui
 
 ,#+begin_cui
 <<ina()>>
-,#+end_ai
+,#+end_cui
 
 #+end_src
 
 Chain of noweb references is possible, referenced cui blocks evaluated with :tangle context.
 
-“.ai” files as links expanded as new chat messages, other files inserted in markdown block and with masked chat prefixes by adding “_” before chat role.
+“.cui” “.ai” files as links expanded as new chat messages, other files inserted in markdown block and with masked chat prefixes by adding “_” before chat role.
 
 * How this works?
-We add “ai” as a type of special block to variables ~org-protecting-blocks~ and ~org-structure-template-alist~.
+We add “cui” as a type of special block to variables ~org-protecting-blocks~ and ~org-structure-template-alist~.
 
 *Org-mode* intrernally use  ~org-element-special-block-parser~ to process our cui block as special.
 
