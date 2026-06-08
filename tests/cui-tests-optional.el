@@ -36,6 +36,21 @@
 
 ;;; Code:
 
+;; -=-= Help function
+(defmacro cui-tests-optional--with-special-context (&rest body)
+  `(with-temp-buffer
+     (org-mode)
+     (transient-mark-mode)
+     (prog1
+         (let ((cui-restapi-con-token '(:openai "test-token-openai")))
+           (insert "#+begin_ai\n")
+           (let ((p1 (point)))
+             (insert "\n#+end_ai")
+             (goto-char p1)
+             ,@body))
+      (set-buffer-modified-p nil))))
+
+
 ;; -=-= For `cui-optional-remove-distant-empty-lines'
 
 (ert-deftest cui-tests-optional--remove-distant-empty-lines1 ()
@@ -93,6 +108,49 @@
        (string-equal
         (nth 4 res) "** Something Importent2")))))
 
+
+
+;; -=-= For `cui-optional-markdown-cycle'
+
+(ert-deftest cui-tests-optional--markdown-cycle ()
+  (cui-tests-optional--with-special-context
+   (cui-optional-markdown-folding-activation) ; folding activation
+   (add-hook 'org-tab-first-hook #'cui-optional-markdown-cycle) ; For TAB key on "# headers"
+   (advice-add 'org-shifttab :around #'cui-optional-markdown-folding-shifttab-advice)
+   (let ((p (point)))
+     (insert "# test header")
+     (insert "\nsdasd\nasd\n[ai]:\n")
+     ;; (buffer-substring-no-properties (line-beginning-position) (line-end-position))
+     ;; - Fold
+     (goto-char p)
+     (org-cycle)
+     (goto-char p)
+     (should-not (text-properties-at (point)))
+     (forward-line 1)
+     (should (member 'cui-markdown-invisible  (text-properties-at (point))))
+     (should (eq 'cui-markdown-value (get-text-property (point) 'cui-markdown-invisible)))
+
+     ;; - UnFold
+     (goto-char p)
+     (org-cycle)
+     (should-not (text-properties-at (point)))
+     (forward-line 1)
+     (should-not (text-properties-at (point)))
+     ;; - Fold block
+     (cui-optional-cycle-block)
+     (should (eq 'cui-markdown-value (get-text-property (point) 'cui-markdown-invisible)))
+     (goto-char p)
+     (should-not (text-properties-at (point)))
+     ;; - UnFold
+     (cui-optional-cycle-block)
+     (should-not (text-properties-at (point)))
+     (forward-line 1)
+     (should-not (text-properties-at (point)))
+     ;; (goto-char p)
+     ;; (text-properties-at (point))
+     ;; (print (member 'cui-markdown-invisible  (text-properties-at (point))))
+   ;; (buffer-substring-no-properties (point-min) (point-max))
+   )))
 
 (provide 'cui-tests-optional)
 

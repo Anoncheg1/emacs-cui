@@ -155,9 +155,6 @@
 ;; - provide place or hook to add custom expansion of link to one line for user defined mode
 ;; - support vars as tags    https://orgmode.org/manual/Environment-of-a-Code-Block.html
 ;; - noweb evaluation with support of variables with some text. like <<call("as")>>
-;; - function to replace "^[\s+]- **word1 [word2]:**" to "^^[\s+]- word1 [word2] :: " and highligh it.
-;; - pre-call: and post-call: for preparation and postprocessing and
-;;  pre-/post-service and model. or guide for hooks
 ;; - implement my/org-execute-in-source-block for markdown that use
 ;;  `org-src--edit-element', for that `org-babel-do-in-edit-buffer'
 ;;  should be rewrited, in which org-edit-src-code should be executed
@@ -166,7 +163,6 @@
 ;;  begining of the line by removing indentation
 ;; - make key to remove all messages and left only the last
 ;; - support "C-c '" (call-interactively 'org-edit-special)
-;; - fold and unfold Markdown headers.
 
 ;;; Code:
 

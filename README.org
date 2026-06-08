@@ -163,14 +163,16 @@ We provide ~cui-optional-markdown-cycle~ function same as ~org-cycle~. It allow 
 To set for Org mode, add those lines to your ~/.emacs file:
 #+begin_src elisp :lexical t :results none :exports code :eval no
 (require 'cui-optional)
-(add-hook 'org-tab-first-hook #'cui-optional-markdown-cycle)
+(add-hook 'org-mode-hook #'cui-optional-markdown-folding-activation)
+(add-hook 'org-tab-first-hook #'cui-optional-markdown-cycle) ; For TAB key on "# headers"
 #+end_src
 
 ---
 
-If you use https://github.com/Anoncheg1/emacs-indent use this:
+If you use https://github.com/Anoncheg1/emacs-indent and ~indent-for-tab-command~ for TAB key instead of org-cycle:
 #+begin_src elisp :lexical t :results none :exports code :eval no
 (require 'cui-optional)
+(add-hook 'org-mode-hook #'cui-optional-markdown-folding-activation)
 (defun cui-org-mode-hook ()
   (setq-local indent-for-tab-steps
               (list
@@ -183,6 +185,13 @@ If you use https://github.com/Anoncheg1/emacs-indent use this:
                #'indent-for-tab-step-6-completion)))
 
 (add-hook 'org-mode-hook 'cui-org-mode-hook)
+#+end_src
+
+---
+
+To cycle block use command ~M-x cui-optional-cycle-block~ or add this advice to make it with default “Shift-TAB” key:
+#+begin_src elisp :lexical t :results none :exports code :eval no
+(advice-add 'org-shifttab :around #'cui-optional-markdown-folding-shifttab-advice)
 #+end_src
 * Supported “[ROLE]:” chat prefixes
 - SYS-EVERYWHERE

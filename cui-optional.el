@@ -36,6 +36,7 @@
 
 (require 'cl-lib) ; Ensure cl-lib is loaded for cl-defun and cl-destructuring-bind
 (require 'org)
+(require 'cui-block)
 (require 'cui-debug)
 
 ;;; Code:
@@ -107,7 +108,7 @@ Should be added the last to be executed first."
           (insert " ") ; this effectively quote standard headers
           (end-of-line))))))
 
-;; -=-= Markdown: folding
+;; -=-= Markdown: folding - healping funcs
 
 (defun cui-optional--markdown-heading-p ()
   "Before first heading?
@@ -163,6 +164,77 @@ Or set cursor at --- or at next chat prefix []: or at the end of chat
         (beginning-of-line)
         (point)))))
 
+;; -=-= Markdown: folding - cycling
+
+;; 1. Tell Emacs that 'cui-markdown-invisible is an alias for the 'invisible property.
+
+(defun cui-optional-markdown-folding-activation ()
+  "For `cui-mode-hook'."
+  (interactive)
+  ;; Establish the alias link
+  (add-to-list 'char-property-alias-alist '(invisible cui-markdown-invisible))
+  ;; Register our custom value to show the ellipsis (...)
+  (add-to-list 'buffer-invisibility-spec '(cui-markdown-value . t)))
+
+
+(defun cui-optional--isearch-open-text-prop (pos)
+   "Unfold the \='cui-markdown-invisible text property block at POS during isearch."
+  (let ((from (if (get-text-property pos 'cui-markdown-invisible)
+                  (previous-single-property-change (min (1+ pos) (point-max)) 'cui-markdown-invisible nil (point-min))
+                pos))
+        (to (next-single-property-change pos 'cui-markdown-invisible nil (point-max))))
+    (cui-optional--show-region-text-prop from to)))
+
+(defun cui-optional--hide-region-text-prop (from to)
+  "Hide the region between FROM and TO using a custom text property.
+Also registers `cui-optional--isearch-open-text-prop' as the `isearch' handler."
+  (interactive "r")
+  (with-silent-modifications
+    ;; 1. Use 'cui-markdown-invisible instead of 'invisible
+    (put-text-property from to 'cui-markdown-invisible 'cui-markdown-value)
+
+    ;; 2. Fix Isearch: Register the callback boundary cleanly
+    (put-text-property from to 'isearch-open-invisible #'cui-optional--isearch-open-text-prop)))
+
+
+(defun cui-optional--show-region-text-prop (from to)
+  "Reveal the hidden text property block between FROM and TO.
+Expands the boundaries to encompass the full \='cui-markdown-invisible
+ block before removing the properties."
+  (interactive "r")
+  (cui--debug "cui-optional--show-region-text-prop %s" from to)
+  (save-excursion
+    ;; 1. Expand 'from' backwards if inside or at the edge of a folded block
+    (when (and (> from (point-min)) (get-text-property (1- from) 'cui-markdown-invisible))
+      (setq from (previous-single-property-change from 'cui-markdown-invisible nil (point-min))))
+    (when (get-text-property from 'cui-markdown-invisible)
+      (setq from (previous-single-property-change (min (1+ from) (point-max)) 'cui-markdown-invisible nil (point-min))))
+
+    ;; 2. Expand 'to' forwards if inside a folded block
+    (when (get-text-property to 'cui-markdown-invisible)
+      (setq to (next-single-property-change to 'cui-markdown-invisible nil (point-max))))
+
+    ;; 3. SILENTLY MANIPULATE PROPERTIES
+    ;; This macro prevents the buffer from being marked as modified,
+    ;; bypasses undo history tracking, and silences change hooks.
+    (with-silent-modifications
+      ;; Strip the custom properties
+      (remove-list-of-text-properties from to '(cui-markdown-invisible isearch-open-invisible))
+
+      ;; 4. FORCE REDISPLAY ENGINE TO UPDATE (The Magic Fix)
+      ;; (put-text-property from to 'cui-markdown-invisible nil)
+      ;; (put-text-property from to 'invisible nil)
+      (font-lock-flush from to))))
+
+
+
+(defun cui-optional--region-has-hidden-subregions-p (from to)
+  "Return non-nil if there are any hidden subregions between FROM and TO."
+  (if (>= from to)
+      nil
+    (and (text-property-any from to 'cui-markdown-invisible 'cui-markdown-value) t)))
+
+
 (defun cui-optional-markdown-cycle (&optional _)
   "Fold/unfold Markdown header.
 Only works in `org-mode'.
@@ -187,11 +259,86 @@ Return t if success."
             (end-of-line)
             (if (org-invisible-p)
                 (progn
-                  (org-fold-region eoh eos nil 'outline) ; show
+                  (cui-optional--show-region-text-prop eoh eos)
+                  ;; (org-fold-region eoh eos nil 'outline) ; show
                   (org-unlogged-message "SUBTREE"))
               ;; else
-              (org-fold-region eoh eos t 'outline) ; hide
+              (cui-optional--hide-region-text-prop eoh eos)
+              ;; (org-fold-region eoh eos t 'outline) ; hide
               (org-unlogged-message "FOLDED"))))))))
+
+
+(defun cui-optional-cycle-content-by-block-fields ()
+  "Process fields within the block region separated by '^---'.
+Collapses text below the highest-level headline found in each field."
+  (interactive)
+  (when-let ((block-region (cui-block--region)))
+    (let ((block-beg (car block-region))
+          (block-end (cdr block-region)))
+
+      ;; 1. Reveal everything first
+      (cui--debug "cui-optional-cycle-content-by-block-fields N1 %s" block-beg block-end)
+      (cui-optional--show-region-text-prop block-beg block-end)
+
+      (save-excursion
+        (goto-char block-beg)
+        ;; 2. Direct forward scan through the entire block
+        (while (re-search-forward "^\\(#+\\) " block-end t)
+          (cui--debug "cui-optional-cycle-content-by-block-fields N2 %s" (point))
+          (let ((beg (line-end-position))
+                ;; Use your helper function to instantly locate the boundary
+                (end (cui-optional--markdown-end-of-subtree)))
+            (cui--debug "cui-optional-cycle-content-by-block-fields N3 %s" beg end)
+
+            ;; 3. Hide the found region if valid
+            (when (> end beg)
+              (cui-optional--hide-region-text-prop beg (1- end)))
+
+            ;; 4. Move point to the end of the subtree to skip over hidden text
+            ;; and continue searching for the next field's headlines.
+            (goto-char end)))))))
+
+
+
+(defun cui-optional-cycle-block ()
+  "Toggle visibility of the current block between \='show and \='overview.
+Same as `outline-cycle-buffer'.
+
+Determines the target block via `cui-block--region'.
+- If hidden subregions exist, reveals them.
+- If already fully revealed, folds contents down to top-level headlines
+  via `cui-optional-cycle-content-by-block-fields'.
+
+Safely isolates processing using `save-excursion' and `narrow-to-region'
+to preserve original buffer point and narrowing state."
+  (interactive)
+  (cui--debug "cui-optional-cycle-global N0 %s" (cui-block--region))
+  (when-let ((block-region (cui-block--region)))
+    (let ((block-beg (car block-region))
+          (block-end (cdr block-region)))
+      (save-excursion
+        ;; (save-restriction
+        ;;   (widen)
+        ;;   ;; Narrow Emacs' view so string/search functions only see this block
+        ;;   (narrow-to-region block-beg block-end)
+          (cui--debug "cui-optional-cycle-global N1 %s" block-beg block-end)
+          (if (cui-optional--region-has-hidden-subregions-p block-beg block-end)
+              (progn
+                (cui--debug "cui-optional-cycle-global has hidden %s %s" block-beg block-end)
+                (cui-optional--show-region-text-prop block-beg block-end)) ; show
+            (cui--debug "cui-optional-cycle-global")
+            (cui-optional-cycle-content-by-block-fields))))))       ; Hide
+
+
+(defun cui-optional-markdown-folding-shifttab-advice (orig-fun &rest args)
+  "Advice for cycle markdown headers in cui block with Shift-TAB.
+ORIG-FUN is `org-shifttab' with its ARGS."
+  (if (and (bound-and-true-p cui-mode)
+           (cui-block-p))
+      (cui-optional-cycle-block)
+    ;; else
+    (apply orig-fun args)))
+
 
 ;;;; provide
 (provide 'cui-optional)

@@ -43,6 +43,7 @@
 
 ;; -=-= help functions
 (defun cui-tests-block-tags-insert-block (&optional name not-clear)
+  "if NOT-CLEAR. "
   (unless not-clear
     ;; (mark-whole-buffer) ; output Mark set
     ;; (call-interactively #'kill-region)

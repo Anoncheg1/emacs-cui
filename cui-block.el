@@ -217,7 +217,8 @@ In `cui-block-roles-prefixes'.")
 ;; org-babel-src-name-regexp)
 (defvar cui-block--markdown-begin-re "^\\s-*```\\([^\s\t\n[{]+\\)[\s\t]*$")
 (defvar cui-block--markdown-end-re "^[\s\t]**```[\s\t]*$")
-(defvar cui-block--markdown-beg-end-re "^[\s\t]*```\\(.*\\)$")
+;; (defvar cui-block--markdown-beg-end-re "^[\s\t]*```\\(.*\\)$")
+(defvar cui-block--markdown-beg-end-re "^[\s\t]*```\\([^`\n]*\\)$")
 (defvar cui-block--chat-prefixes-re "^[\s\t]*\\[\\([^\]]+\\)\\(:\\]\\|\\]:\\)\\s-*"
   "Prefix should be at the begining of the line with spaces or without.
 Or roles regex.")
@@ -615,8 +616,6 @@ Return list of integers or nil."
       (reverse regions))))
 
 
-
-;; old cui-block--pos-in-markdown-block-p
 (defun cui-block--markdown-block-p (&optional limit-start limit-end)
   "Return (cons beg end) if pos is inside markdown block.
 Execution in not `org-mode' is supported.
@@ -641,6 +640,7 @@ Return (cons beg end), Where beg is bol for markdown block, end is bol
     (let ((limit-start (or limit-start (car reg)))
           (limit-end (or limit-end (cdr reg))))
       ;; - main
+      (cui--debug "cui-block--markdown-block-p N1 %s %s" limit-start limit-end)
       (when-let* ((regions (cui-block--markdown-block-regions limit-start limit-end))
                   (res (cui-block--find-region-with-position regions pos)))
         (cui--debug "cui-block--markdown-block-p N10 %s %s %s" (point) regions res)
@@ -1493,15 +1493,11 @@ Argument START and END are limits for searching."
   (let ((case-fold-search t))
     (while (and (< (point) end)
                 (re-search-forward cui-block--markdown-beg-end-re end t))
-
-
       (let ((lang (match-string 1))
             (block-begin (match-end 0))
             (block-begin-begin (match-beginning 0)))
         ;; no ``` at the same line
-        (when (and (or (not  lang)
-                       (and lang (not (string-match-p "```" lang))))
-                   (re-search-forward cui-block--markdown-end-re end t))
+        (when (re-search-forward cui-block--markdown-end-re end t)
           (let ((block-end (match-beginning 0))
                 (block-end-end (match-end 0)))
             ;; - fontify begin and end of markdown block
