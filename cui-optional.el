@@ -178,7 +178,7 @@ Or set cursor at --- or at next chat prefix []: or at the end of chat
 
 
 (defun cui-optional--isearch-open-text-prop (pos)
-   "Unfold the 'cui-markdown-invisible text property block at POS during `isearch`."
+   "Unfold the \='cui-markdown-invisible text property block at POS during isearch."
   (let ((from (if (get-text-property pos 'cui-markdown-invisible)
                   (previous-single-property-change (min (1+ pos) (point-max)) 'cui-markdown-invisible nil (point-min))
                 pos))
@@ -187,7 +187,7 @@ Or set cursor at --- or at next chat prefix []: or at the end of chat
 
 (defun cui-optional--hide-region-text-prop (from to)
   "Hide the region between FROM and TO using a custom text property.
-Also registers `cui-optional--isearch-open-text-prop` as the `isearch` handler."
+Also registers `cui-optional--isearch-open-text-prop' as the `isearch' handler."
   (interactive "r")
   (with-silent-modifications
     ;; 1. Use 'cui-markdown-invisible instead of 'invisible
@@ -199,7 +199,7 @@ Also registers `cui-optional--isearch-open-text-prop` as the `isearch` handler."
 
 (defun cui-optional--show-region-text-prop (from to)
   "Reveal the hidden text property block between FROM and TO.
-Expands the boundaries to encompass the full 'cui-markdown-invisible
+Expands the boundaries to encompass the full \='cui-markdown-invisible
  block before removing the properties."
   (interactive "r")
   (cui--debug "cui-optional--show-region-text-prop %s" from to)
@@ -301,7 +301,7 @@ Collapses text below the highest-level headline found in each field."
 
 
 (defun cui-optional-cycle-block ()
-  "Toggle visibility of the current block between 'show' and 'overview'.
+  "Toggle visibility of the current block between \='show and \='overview.
 Same as `outline-cycle-buffer'.
 
 Determines the target block via `cui-block--region'.
