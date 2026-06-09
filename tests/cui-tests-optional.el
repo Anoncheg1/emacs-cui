@@ -40,7 +40,6 @@
 (defmacro cui-tests-optional--with-special-context (&rest body)
   `(with-temp-buffer
      (org-mode)
-     (cui-mode)
      (transient-mark-mode)
      (prog1
          (let ((cui-restapi-con-token '(:openai "test-token-openai")))

@@ -36,6 +36,7 @@
 
 (require 'cl-lib) ; Ensure cl-lib is loaded for cl-defun and cl-destructuring-bind
 (require 'org)
+(require 'cui-block)
 (require 'cui-debug)
 
 ;;; Code:
