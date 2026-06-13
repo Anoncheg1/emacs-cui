@@ -1,4 +1,4 @@
-;;; cui.el --- AI-LLM chat blocks for org-mode -*- lexical-binding: t; -*-
+;;; cui.el --- Chat blocks in org-mode for LLM and agents -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 github.com/Anoncheg1,codeberg.org/Anoncheg
 ;; Author: <github.com/Anoncheg1,codeberg.org/Anoncheg>
@@ -163,6 +163,7 @@
 ;;  begining of the line by removing indentation
 ;; - make key to remove all messages and left only the last
 ;; - support "C-c '" (call-interactively 'org-edit-special)
+;; - dont fill lines that surounded with single *.
 
 ;;; Code:
 
