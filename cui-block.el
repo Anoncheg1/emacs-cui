@@ -71,6 +71,11 @@
   :type 'boolean
   :group 'cui)
 
+(defcustom cui-block-fontify-pagesep t
+  "Non-nil means enable fontinfication for markdown \"---\" page separator."
+  :type 'boolean
+  :group 'cui)
+
 (defcustom cui-block-roles-prefixes '(("SYS" . system)
                                       ("ME" . user)
                                       ("ai" . assistant) ; lowercase for style, but case is ignored
@@ -1394,7 +1399,7 @@ Optional argument HASH not used."
            beg end
            ;; indent
            )
-      (when outside-scope (widen)) ;; ---- WIDDEN
+      (when outside-scope (widen)) ;; ! WIDDEN
       (goto-char existing-result) ;; must be true
       ;; (setq indent (current-indentation))
       (forward-line 1)
@@ -1409,7 +1414,7 @@ Optional argument HASH not used."
       (setq end (copy-marker (point) t))
       (org-babel-examplify-region beg end "")
       ;; finally
-      (when outside-scope (narrow-to-region visible-beg visible-end)))) ;; ---- NARROW
+      (when outside-scope (narrow-to-region visible-beg visible-end)))) ;; ! NARROW
   t)
 
 (defun cui-block-where-is-result (&optional insert _info hash)
@@ -1548,6 +1553,39 @@ Executed in `font-lock-defaults' chain."
         t))))
 
 
+(defun cui-block--fontify-markdown-pagesep (start end)
+  "Set face and overlay to make --- more visible.
+For current buffer in position between START and END.
+Executed in `font-lock-defaults' chain."
+  (goto-char start)
+  (while (re-search-forward "^[\s-]*---[\s-]*$" end t)
+    ;; (print (match-beginning 0) (match-end 0)))
+    ;; (setq mbeg (match-beginning 0)) ; (prop-match-beginning match))
+    ;; (remove-text-properties mbeg (point) (list 'face))
+    ;; (put-text-property mbeg (point) 'face (list 'cui-block-quote 'org-table))
+    (let ((lstart (match-beginning 0))
+          (lend (match-end 0)))
+      ;; 3. CLEANUP: Clear overlays sitting exactly on that last character slot
+      (remove-overlays lstart lend 'identity 'cui-markdown-pagesep)
+
+      ;; 4. CREATION: Render using calculated hard padding strings
+      (let* ((ov (make-overlay lstart lend))
+             (last-char (buffer-substring-no-properties lstart lend))
+             (date-text (propertize (make-string (- fill-column 3) ?\s)
+                                    'face 'cui-block-quote ; '(:background "#2272a4")
+                                    ;; 'help-echo (format "Age: %d days old" days-old)
+                                    'read-only t
+                                    'intangible t
+                                    'cursor-intangible t)))
+
+        (overlay-put ov 'identity 'cui-markdown-pagesep)
+        (overlay-put ov 'priority 100)
+
+        ;; Concatenate the last character, the exact computed spaces, and the date.
+        (overlay-put ov 'display (concat last-char date-text)))))
+  (goto-char end)) ; return t
+
+
 (defun cui-block--fontify-markdown-headers (start end)
   "Fontify started with # character headers.
 Argument START END are block begin and end, used as limits here."
@@ -1656,7 +1694,6 @@ support splitting."
         (forward-line)))
     (goto-char end))) ;; Return t if performed work.
 
-
 (defun cui-block--fontify-me-ai-chat-prefixes (lim-beg lim-end)
   "Fontify chat message prefixes like [ME:] with face.
 Argument LIM-BEG cui block begining.
@@ -1699,6 +1736,7 @@ We search for \\[...\\] multiline \\(...\\) from LIM-BEG to LIM-END."
 ;; -=-= Fontify: main
 (defun cui-block--font-lock-fontify-markdown-and-org (limit)
   "Fontify markdown elements in cui blocks, up to LIMIT.
+Elements: chat prefix, table, headers, quotes, LaTeX.
 This is special fontify function, that return t when match found.
 We insert advice right after `org-fontify-meta-lines-and-blocks-1' witch
 called as a part of Org Font Lock mode configuration of keywords (in
@@ -1707,6 +1745,7 @@ rules in `font-lock-defaults' variable.
 TODO: fontify if there is only end of cui block on page."
   (let ((case-fold-search t)
         beg end)
+    ;; 1) Find cui block beg end.
     (while (and (< (point) limit)
                 (re-search-forward cui-block--cui-block-begin-re limit t))
       (setq beg (match-end 0))
@@ -1718,7 +1757,7 @@ TODO: fontify if there is only end of cui block on page."
       ;; As a general rule, we apply the element (container) faces
       ;; first and then prepend the object faces on top.
       (save-match-data
-
+        ;; 2) fontify elements.
         ;; [AI]: [ME]:
         (cui-block--fontify-me-ai-chat-prefixes beg end)
         ;; table
@@ -1733,7 +1772,10 @@ TODO: fontify if there is only end of cui block on page."
           (cui-block--fontify-markdown-single-quotes-and-formatting beg end))
         ;; LaTeX startin with [ or (
         (when cui-block-fontify-latex
-          (cui-block--fontify-latex-blocks beg end)))
+          (cui-block--fontify-latex-blocks beg end))
+        ;; "---"
+        (when cui-block-fontify-pagesep
+          (cui-block--fontify-markdown-pagesep beg end)))
       (goto-char end))
     ;; required by font lock mode:
     (goto-char limit))) ; return t

@@ -562,6 +562,7 @@ Used to inject font-locks to `org-font-lock-extra-keywords' variable."
                                         org-font-lock-extra-keywords
                                         (seq-position org-font-lock-extra-keywords '(org-fontify-meta-lines-and-blocks))
                                         '(cui-block--font-lock-fontify-markdown-blocks)))
+    ;; TODO: add > quotes here
     ;; 2) fontify-links (and clear small)
     (setq org-font-lock-extra-keywords (cui--insert-after
                                         org-font-lock-extra-keywords
