@@ -115,6 +115,7 @@
 ;; - Solution for "callback hell"	https://github.com/Anoncheg1/emacs-async1
 ;; - Restore buffer state	https://github.com/Anoncheg1/emacs-unmodified-buffer1
 ;; - outline.el usage		https://github.com/Anoncheg1/emacs-outline-it
+;; - Dates for Org-mode headers	https://github.com/Anoncheg1/emacs-org-history
 
 ;;;; Donate:
 
