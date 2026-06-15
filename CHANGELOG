@@ -3,12 +3,19 @@
 
 ** Functional changes:
 
+- Renaming from *ai* to *cui*, replacing ai word to agent.
+
 - Displaying count of active request moved to “progress reporter” notification.
 
+- Added optional feature to fold markdown blocks.
 
 ** Improvements:
 
-- Better composing markdown block for filepath, better checking if file is binary
+- Better composing markdown block for filepath, better checking if file is binary.
+
+- Better highlighting for **..**, for fill-paragraph such lines will not be splitted.
+
+- Refactoring of filling lines.
 
 * v0.3.1 [2026-05-12 Tue]
 

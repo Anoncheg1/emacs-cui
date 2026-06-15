@@ -5,7 +5,7 @@
 
 * CUI - chat user interface to LLMs and agents in Org blocks.
 
-*Version 0.3.2*
+*Version: 0.3.2*
 Emacs package, provide block ~#+begin_cui~ in Org mode for communication with LLMs APIs. Inspired by Robert Krahn's [[https://github.com/rksm/org-ai][org-ai package]]
 
 Protocol: “OpenAI like” HTTP REST API. (url.el)
