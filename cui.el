@@ -131,19 +131,14 @@
 ;;       foo=1" and to past to text in [foo]
 ;; - more tags? like: "Fix @problems then document the
 ;;         changes in @/CHANGELOG.md" @url, @file, @folder, @header? (Org)
-;; - use cui-restapi-prepare-content for :chain
-;; - Think about to pass callback for writing to chain implementations
-;;    and main implementation, to make it more general.
 ;; - make org-block-tags optional or not
 ;; - key to enable full Org highlighting? think about it
-;; - fontify latex [[file:/usr/share/emacs/30.2/lisp/org/org.el::16097::(defun org-inside-latex-macro-p ()]]
+;; - better fontify latex [[file:/usr/share/emacs/30.2/lisp/org/org.el::16097::(defun org-inside-latex-macro-p ()]]
 ;; [[file:/usr/share/emacs/30.2/lisp/textmodes/tex-mode.el::1277::(setq-local font-lock-defaults]]
-;; - small markdown mode on highlighting
+;; - small markdown mode for highlighting outside of Org
 ;; - simple Elisp function to ask LLM
 ;; - add guide to use `cui-restapi--url-request' and with retries for simple
 ;;   ELisp LLM call and get result for TAB key and some place in buffer.
-;; - add option for tag to expand only the last user prompt or in all.
-;; - C-c C-k should jump to current bexgining of message, not next
 ;; - add buttons: 1) generate button based on LLM answer 2) handle clicking.
 ;; - default requst as one plist configuration
 ;; - support for https://github.com/LionyxML/markdown-ts-mode
@@ -152,7 +147,6 @@
 ;; - fill-paragraph should not break markdown quotes and bolds
 ;; - make font-lock better like in [[file:/usr/share/emacs/30.2/lisp/gnus/message.el
 ;; ::1701::(defun message-font-lock-make-cited-text-matcher (level maxlevel)]]
-;; - make `cui-expand-block' executed with `org-babel-expand-src-block'.
 ;; - provide place or hook to add custom expansion of link to one line for user defined mode
 ;; - support vars as tags    https://orgmode.org/manual/Environment-of-a-Code-Block.html
 ;; - noweb evaluation with support of variables with some text. like <<call("as")>>
@@ -163,8 +157,11 @@
 ;; - add optional function to put text in markdown language block to the
 ;;  begining of the line by removing indentation
 ;; - make key to remove all messages and left only the last
-;; - support "C-c '" (call-interactively 'org-edit-special)
-;; - dont fill lines that surounded with single *.
+;; - support "C-c '" (call-interactively 'org-edit-special) - make
+;;  `cui-expand-block' executed with `org-babel-expand-src-block'.
+;; - make it easy to add custom @tag (regex and args) and testing
+;;  suite for this
+
 
 ;;; Code:
 
