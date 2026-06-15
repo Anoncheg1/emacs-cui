@@ -1554,6 +1554,7 @@ Executed in `font-lock-defaults' chain."
 
 (defun cui-block--fontify-markdown-pagesep (start end)
   "Set face and overlay to make page separators more visible, allowing editing.
+For current buffer in position between START and END.
 Uses a regex capture group to isolate and count ONLY the hyphens efficiently."
   (goto-char start)
   ;; Match lines with optional spaces, 1 or more hyphens (Group 1), and optional spaces
