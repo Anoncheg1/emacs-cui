@@ -1552,39 +1552,39 @@ Executed in `font-lock-defaults' chain."
                            'face 'org-table)
         t))))
 
-
 (defun cui-block--fontify-markdown-pagesep (start end)
-  "Set face and overlay to make --- more visible.
-For current buffer in position between START and END.
-Executed in `font-lock-defaults' chain."
+  "Set face and overlay to make page separators more visible, allowing editing.
+Uses a regex capture group to isolate and count ONLY the hyphens efficiently."
   (goto-char start)
-  (while (re-search-forward "^[\s-]*---[\s-]*$" end t)
-    ;; (print (match-beginning 0) (match-end 0)))
-    ;; (setq mbeg (match-beginning 0)) ; (prop-match-beginning match))
-    ;; (remove-text-properties mbeg (point) (list 'face))
-    ;; (put-text-property mbeg (point) 'face (list 'cui-block-quote 'org-table))
-    (let ((lstart (match-beginning 0))
-          (lend (match-end 0)))
-      ;; 3. CLEANUP: Clear overlays sitting exactly on that last character slot
-      (remove-overlays lstart lend 'identity 'cui-markdown-pagesep)
+  ;; Match lines with optional spaces, 1 or more hyphens (Group 1), and optional spaces
+  (while (re-search-forward "^[\s\t]*\\(-\\{1,\\}\\)[\s\t]*$" end t)
+    (let* ((match-beg (match-beginning 0))
+           (lend (match-end 0))
+           ;; Calculate length using ONLY the captured hyphen group (Group 1)
+           (hyphen-count (- (match-end 1) (match-beginning 1))))
 
-      ;; 4. CREATION: Render using calculated hard padding strings
-      (let* ((ov (make-overlay lstart lend))
-             (last-char (buffer-substring-no-properties lstart lend))
-             (date-text (propertize (make-string (- fill-column 3) ?\s)
-                                    'face 'cui-block-quote ; '(:background "#2272a4")
-                                    ;; 'help-echo (format "Age: %d days old" days-old)
-                                    'read-only t
-                                    'intangible t
-                                    'cursor-intangible t)))
+      ;; 3. CLEANUP: Always clear overlays from the ENTIRE match area first.
+      (remove-overlays match-beg lend 'identity 'cui-markdown-pagesep)
 
-        (overlay-put ov 'identity 'cui-markdown-pagesep)
-        (overlay-put ov 'priority 100)
+      ;; 4. CREATION: Only render the styling if there are 3 or more HYPHENS
+      (when (>= hyphen-count 3)
+        (let* ((lstart (1- lend)) ; Overlay only goes on the very last character slot
+               (ov (make-overlay lstart lend))
+               ;; Get just the last character to anchor the display replacement
+               (last-char (buffer-substring-no-properties lstart lend))
+               ;; Ensure padding matches fill-column minus just the hyphen count
+               (padding-len (max 0 (- fill-column hyphen-count)))
+               (date-text (propertize (make-string padding-len ?\s)
+                                      'face 'cui-block-quote
+                                      'read-only t
+                                      'intangible t
+                                      'cursor-intangible t)))
 
-        ;; Concatenate the last character, the exact computed spaces, and the date.
-        (overlay-put ov 'display (concat last-char date-text)))))
-  (goto-char end)) ; return t
-
+          (overlay-put ov 'identity 'cui-markdown-pagesep)
+          (overlay-put ov 'priority 100)
+          ;; Concatenate the last character, the exact computed spaces, and the date.
+          (overlay-put ov 'display (concat last-char date-text))))))
+  (goto-char end))
 
 (defun cui-block--fontify-markdown-headers (start end)
   "Fontify started with # character headers.
