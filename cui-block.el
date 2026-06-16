@@ -61,17 +61,17 @@
   :type 'boolean
   :group 'cui)
 
-(defcustom cui-block-fontify-markdown-headers-and-formatting t
+(defcustom cui-block-fontify-markdown-headers-and-formatting-flag t
   "Non-nil means enable fontinfication for Org tables."
   :type 'boolean
   :group 'cui)
 
-(defcustom cui-block-fontify-latex t
+(defcustom cui-block-fontify-latex-flag t
   "Non-nil means enable fontinfication for not quoted LaTex."
   :type 'boolean
   :group 'cui)
 
-(defcustom cui-block-fontify-pagesep t
+(defcustom cui-block-fontify-pagesep-flag t
   "Non-nil means enable fontinfication for markdown \"---\" page separator."
   :type 'boolean
   :group 'cui)
@@ -1766,17 +1766,17 @@ TODO: fontify if there is only end of cui block on page."
         (when cui-block-fontify-org-tables-flag
           (cui-block--fontify-org-tables beg end))
         ;; headers and *bold*
-        (when cui-block-fontify-markdown-headers-and-formatting
+        (when cui-block-fontify-markdown-headers-and-formatting-flag
           ;; Headers should be after bold formatting, because we
           ;; remove org-block from bold text on header and for bold
           ;; don't place org-block if on header
           (cui-block--fontify-markdown-headers beg end)
           (cui-block--fontify-markdown-single-quotes-and-formatting beg end))
         ;; LaTeX startin with [ or (
-        (when cui-block-fontify-latex
+        (when cui-block-fontify-latex-flag
           (cui-block--fontify-latex-blocks beg end))
         ;; "---"
-        (when cui-block-fontify-pagesep
+        (when cui-block-fontify-pagesep-flag
           (cui-block--fontify-markdown-pagesep beg end)))
       (goto-char end))
     ;; required by font lock mode:

@@ -193,12 +193,11 @@
                      "[[file:/mock/org.org::1::*n \\[2026-04-14 Tue\\]][n [2026-04-14 Tue]​]]")
                     )))
       (should (string-equal res "
-```text
 # n [2026-04-14 Tue]
 as
 
 
-```
+---
 "))))
 
   (ert-deftest cui-tests-block-tags--get-replacement-for-org-link-header2 ()
@@ -213,12 +212,11 @@ as
                      "[[file:/mock/org.org::1::*n \\[2026-04-14 Tue\\]][n [2026-04-14 Tue]​]]")
                     ))
       (should (string-equal res "
-```text
 # n [2026-04-14 Tue]
 as
 
 
-```
+---
 ")))
     ))
 
@@ -231,16 +229,16 @@ as
       (org-mode)
       (setq-local buffer-file-name "/mock/org.org")
       (insert "* headline\nasdas\n** sub-headline\n asd")
+      (set-buffer-modified-p nil)
       (setq res1 (cui-block-tags-replace  "11[[file:/mock/org.org::* headline]]4444"))
       (setq target
             "11
-```text
 # headline
 asdas
 
 ## sub-headline
  asd
-```
+---
 
 4444")
       (should (string-equal res1 target))
@@ -264,14 +262,14 @@ asdas
 
         (setq buffer-file-name "/mock/org.org")
         (insert "* headline\nasdas\n** sub-headline\n asd")
+        (set-buffer-modified-p nil)
           (setq target "11
-```text
 # headline
 asdas
 
 ## sub-headline
  asd
-```
+---
 
 4444")
           (setq res1 (cui-block-tags-replace "11[[file:/mock/org.org::1::* headline]]4444"))
@@ -281,27 +279,24 @@ asdas
           (should (string-equal target res2))
           ;; - check for two same links
           (setq target "11
-```text
 # headline
 asdas
 
 ## sub-headline
  asd
-```
+---
 
 4444
-```text
 # headline
 asdas
 
 ## sub-headline
  asd
-```
+---
 
 5555")
           (setq res3  (cui-block-tags-replace  "11[[1::* headline]]4444[[1::* headline]]5555"))
-          (should (string-equal target res3))
-          )
+          (should (string-equal target res3)))
         ;; (advice-remove 'org-open-file (intern "org-links-org-open-file-advice"))
 
         ;; (insert "[[file:/mock/org.org::1::* headline]]")
@@ -364,7 +359,7 @@ asdas
       (with-temp-buffer
         (org-mode)
         (add-hook 'org-execute-file-search-functions (intern "org-links-additional-formats"))
-        (insert "* headline\nasdas\n** sub-headline\n asd\nss2")
+        (insert "* headline\nasdas\n** sub-headline1\n asd\nss2\n** sub-headline2\ntext")
         (setq buffer-file-name "/mock/org.org")
         (read-only-mode)
         (set-buffer-modified-p nil)
@@ -373,23 +368,36 @@ asdas
                       "/mock/org.org" "2-3"))
 
         (setq target
-              "\n```org\nasdas\n** sub-headline\n```")
+              "\n```org\nasdas\n** sub-headline1\n```")
         (should (string-equal target res1))
-        (setq target
-              "
-```text
-## sub-headline
+        (setq target "
+## sub-headline1
  asd
 ss2
-```
+
+---
 ")
         ;; (print (buffer-substring-no-properties (point-min) (point-max)))))
         (setq res2 (cui-block-tags--get-replacement-for-org-file-link-in-other-file
-                      "/mock/org.org" "*sub-headline"))
+                      "/mock/org.org" "*sub-headline1"))
+        (should (string-equal target res2))
+        (setq res2 (cui-block-tags--get-replacement-for-org-file-link-in-other-file
+                      "/mock/org.org" "*headline"))
+        (setq target "
+# headline
+asdas
+
+## sub-headline1
+ asd
+ss2
+
+## sub-headline2
+text
+---
+")
         (should (string-equal target res2))
 
         ;; (advice-remove 'org-open-file (intern "org-links-org-open-file-advice"))
-
         ))))
 
 ;; -=-= Test: cui-block-tags--take-n-lines

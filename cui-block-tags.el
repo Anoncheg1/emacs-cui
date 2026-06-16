@@ -858,11 +858,30 @@ Return string or nil."
    (t
     (user-error "No outline, function, ai message or markdown block was found to get a block"))))
 
+(defun cui-block-tags--get-content-at-point-org-headline (el)
+  "make string: #*level + title for EL."
+  (prog1 (concat "\n" (make-string (org-element-property :level el) ?#) " " (org-element-property :raw-value el))
+    ;; MOVE!
+    (while (progn (forward-line) (end-of-line) (bolp)))
+    (beginning-of-line)))
+
+(defun cui-block-tags--get-content-at-point-org-block (el)
+  "For EL."
+  (concat "\n"
+          (prog1 (cui-block-tags--get-content-org-block-at-point el cui-block-markers t) ; noweb issue
+            ;; MOVE!
+            (org-forward-element))))
+
 (defun cui-block-tags--get-content-at-point-org (&optional cui-block-markers)
   "Prepare block for LLM of Org element at current position.
 Optional CUI-BLOCK-MARKERS argument used to prevent loop.
 Cursor position may be not at the begining of the line for
  `cui-block-tags--get-m-block-at-point'.
+
+Guide: Every element have unique:
+1) forward movement
+2) parsing it to text as result
+
 Return string or nil."
   (let* ((element (or (cui-block-tags--block-at-point) (org-element-context)))
          (type (org-element-type element))) ; Org block or cui block or some element (not in block)
@@ -875,9 +894,9 @@ Return string or nil."
             el ; current element in loop
             type ; type of current element in loop
             )
-        (push "\n```text" replacement-list)
+
         ;; Loop over headlines, to process every blocks and org elements to markdown for LLM
-        (while (< (point) (org-element-property :end element))
+        (while (< (point) (org-element-property :end element)) ; (org-end-of-subtree t t)
           ;; supported sub-elements: headline, blocks
           ;; we add new line at begining of every "push"
           (setq el (org-element-context)) ; may be cui block
@@ -886,25 +905,21 @@ Return string or nil."
           (push (cond
                  ;; 1. Sub: Headline
                  ((eq type 'headline)
-                  ;; make string: #*level + title
-                  (prog1 (concat "\n" (make-string (org-element-property :level el) ?#) " " (org-element-property :raw-value el))
-                    ;; MOVE!
-                    (while (progn (forward-line) (end-of-line) (bolp)))
-                    (beginning-of-line)))
+
+                  (cui-block-tags--get-content-at-point-org-headline el))
+
                  ;; 1. Sub: Block
                  ((member type  cui-block-tags-org-blocks-types)
-                  (concat "\n"
-                  (prog1 (cui-block-tags--get-content-org-block-at-point el cui-block-markers t) ; noweb issue
-                     ;; MOVE!
-                    (org-forward-element))))
+                  cui-block-tags--get-content-at-point-org-block (el))
 
                  (t ; others
+                  ;; (push "\n```text" replacement-list)
                   (prog1
                       (concat "\n" (buffer-substring-no-properties (line-beginning-position) (org-element-property :end el)))
                     ;; MOVE!
                     (org-forward-element))))
                 replacement-list)) ; push to
-        (push "\n```\n" replacement-list)
+        (push "\n---\n" replacement-list)
         (apply #'concat (reverse replacement-list))))
      ;; - (2) case - at first line of Markdown block one line or multiline - in org block
      ((and (member type cui-block-tags-org-blocks-types)

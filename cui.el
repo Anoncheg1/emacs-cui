@@ -162,6 +162,7 @@
 ;; - make it easy to add custom @tag (regex and args) and testing
 ;;  suite for this
 ;; - make org-to-markdown as a separage file.
+;; - Implement  Agent Client Protocol (ACP) and Websocket
 
 ;;; Code:
 

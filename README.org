@@ -10,7 +10,7 @@ Emacs package, provide block ~#+begin_cui~ in Org mode for communication with LL
 
 Protocol: “OpenAI like” HTTP REST API. (url.el)
 
-*Core principle*: for text, extensibility and comfort.
+*Philosophy*: stateless, one-direction for text, extensibility and comfort.
 
 * Features:
 - *Tags and links* expansion of @ tags, Org [] links

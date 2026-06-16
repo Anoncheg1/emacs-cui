@@ -92,20 +92,18 @@ asd
 asd2")
 
 
-(defvar cui-tests-cui--expand-block-2-shouldbe "```text
-# tt1
+(defvar cui-tests-cui--expand-block-2-shouldbe "# tt1
 asd
 
 
-```
+---
 
 
 
 
-```text
 # tt2
 asd2
-```")
+---")
 (when (require 'org-links nil 'noerror)
   (ert-deftest cui-tests-cui--expand-block-2 ()
     (with-temp-buffer
@@ -128,22 +126,21 @@ asd2
           ;; (vconcat (list (list :role 'user :content cui-tests-cui--expand-block-2-shouldbe))))))
           (should (equal messages
                          (vconcat (list (list :role 'user :content cui-tests-cui--expand-block-2-shouldbe)))))
+          (print (setq res (cui-expand-block-deep)))
           (should (equal
                    (cui-expand-block-deep)
-'("https://api.openai.com/v1/chat/completions" (("Content-Type" . "application/json") ("Authorization" . "Bearer token")) ((messages . [(:role system :content "Be helpful.") (:role user :content "```text
-# tt1
+'("https://api.openai.com/v1/chat/completions" (("Content-Type" . "application/json") ("Authorization" . "Bearer token")) ((messages . [(:role system :content "Be helpful.") (:role user :content "# tt1
 asd
 
 
-```
+---
 
 
 
 
-```text
 # tt2
 asd2
-```")]) (stream . t)))
+---")]) (stream . t)))
         )))))))
 
 
