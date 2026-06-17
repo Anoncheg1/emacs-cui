@@ -859,22 +859,23 @@ Return string or nil."
     (user-error "No outline, function, ai message or markdown block was found to get a block"))))
 
 (defun cui-block-tags--get-content-at-point-org-headline (el)
-  "make string: #*level + title for EL."
+  "Make string: #*level + title for EL."
   (prog1 (concat "\n" (make-string (org-element-property :level el) ?#) " " (org-element-property :raw-value el))
-    ;; MOVE!
-    (while (progn (forward-line) (end-of-line) (bolp)))
+    (while (progn (forward-line) (end-of-line) (bolp))) ;; MOVE!
     (beginning-of-line)))
 
-(defun cui-block-tags--get-content-at-point-org-block (el)
-  "For EL."
+(defun cui-block-tags--get-content-at-point-org-block (element cui-block-markers)
+  "For Org blocks supported.
+Argument CUI-BLOCK-MARKERS used to prevent loop, it may have other
+ links in org ELEMENT."
   (concat "\n"
-          (prog1 (cui-block-tags--get-content-org-block-at-point el cui-block-markers t) ; noweb issue
-            ;; MOVE!
-            (org-forward-element))))
+          (prog1 (cui-block-tags--get-content-org-block-at-point element cui-block-markers t) ; noweb issue
+            (org-forward-element)))) ;; MOVE!
 
 (defun cui-block-tags--get-content-at-point-org (&optional cui-block-markers)
   "Prepare block for LLM of Org element at current position.
-Optional CUI-BLOCK-MARKERS argument used to prevent loop.
+Optional CUI-BLOCK-MARKERS argument used to prevent loop, it may have
+ other links.
 Cursor position may be not at the begining of the line for
  `cui-block-tags--get-m-block-at-point'.
 
@@ -892,8 +893,7 @@ Return string or nil."
       (beginning-of-line)
       (let (replacement-list ; result
             el ; current element in loop
-            type ; type of current element in loop
-            )
+            type) ; type of current element in loop
 
         ;; Loop over headlines, to process every blocks and org elements to markdown for LLM
         (while (< (point) (org-element-property :end element)) ; (org-end-of-subtree t t)
@@ -910,7 +910,7 @@ Return string or nil."
 
                  ;; 1. Sub: Block
                  ((member type  cui-block-tags-org-blocks-types)
-                  cui-block-tags--get-content-at-point-org-block (el))
+                  (cui-block-tags--get-content-at-point-org-block el cui-block-markers))
 
                  (t ; others
                   ;; (push "\n```text" replacement-list)
