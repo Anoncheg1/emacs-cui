@@ -163,7 +163,7 @@
 ;;  suite for this
 ;; - make org-to-markdown as a separage file.
 ;; - Implement  Agent Client Protocol (ACP) and Websocket
-
+;; - Ability to use several SYS prompts and store it separately.
 ;;; Code:
 
 ;; Touch: Pain, water and warm.
@@ -378,10 +378,14 @@ block was found, otherwise nil."
 
 ;; -=-= interactive fn: key C-g: keyboard quit
 (defun cui-keyboard-quit ()
-  "Keyboard quit advice.
-- If there is an active region at current position in current buffer, do
-  nothing (normal \\<mapvar> & \\[keyboard-quit] will deactivate it).
-- in debug-buffer - kill all requests."
+   "Provide context-aware quit actions for CUI buffers.
+If there is an active region in the current buffer, do nothing and let
+ `keyboard-quit' deactivate it normally.
+If the current buffer is the debug buffer (`cui-debug-buffer'), kill all
+ active URL requests.
+If `cui-mode' is active and not inside the minibuffer, stop the current
+ URL request.  If `cui-debug-buffer' is non-nil, show errors
+ dynamically; otherwise, suppress them."
   (interactive)
   ;; Checks:
   ;; - 1) no region mode?
@@ -552,7 +556,8 @@ Used to inject font-locks to `org-font-lock-extra-keywords' variable."
 
 
 (defun cui--add-cui-font-lock-to-org-keywords ()
-  "Hook, that Insert our fontify functions in Org font lock keywords."
+  "Hook, that Insert our fontify functions in Org font lock keywords.
+Highlighting markdown."
   ;; add fontify-ai-subblocks - markdown blocks and tables.
   ;; Put in order to `org-font-lock-keywords': (cui-block--font-lock-fontify-markdown-and-org) (cui-block-tags--font-lock-fontify-links) (cui-block--font-lock-fontify-markdown-blocks)
   (when cui-fontification-flag

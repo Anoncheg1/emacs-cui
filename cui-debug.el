@@ -123,17 +123,14 @@ Return last argument, but should not be used for return value."
              (current-window (selected-window))
              (bu-window (or (get-buffer-window bu)
                             (when (not (eq last-input-event 7)) ; not C-g exit - too much verbose
-                              (if (>= (count-windows) 2)
-                                  (display-buffer-in-direction ; exist but hidden
-                                   bu
-                                   '((direction . left)
-                                     (window . new)
-                                     (window-width . 0.2)))
-                                ;; else
-                                (display-buffer-in-direction ; exist but hidden
+                              (let ((w-width (if (>= (count-windows) 2)
+                                                0.2
+                                              0.33)))
+                                (display-buffer-in-direction
                                  bu
-                                 '((direction . left)
-                                   (window . new)))))
+                                 (list (cons 'direction 'left)
+                                       (cons 'window 'new)
+                                       (cons 'window-width w-width)))))
                             (when (not (eq last-input-event 7)) ; not C-g exit - too much verbose
                               (select-window current-window))))
              (timestamp (when cui-debug-timestamp-flag

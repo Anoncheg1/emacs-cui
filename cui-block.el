@@ -690,6 +690,7 @@ pos at Org table."
       (progn (goto-char pos)
              (beginning-of-line)
              (or (looking-at "^\\s-*> ") ; from `cui-block-fill-region-as-paragraph'
+                 (looking-at cui-block--chat-prefixes-re)
                  (and (not dont-check-tables) (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))) ; skip tables
     (goto-char pos)))
 
@@ -1649,31 +1650,27 @@ support splitting."
   (let (b1 e1 b2 e2)
     (goto-char start)
     ;; 1. *Bold*
-    ;; old: "\\*\\{1,3\\}\\(\\w[^*\n]+\\)\\*\\{1,3\\}"
-    (while (re-search-forward "\\*\\{1,3\\}\\([^*\n]+\\)\\*\\{1,3\\}" end t)
-      ;; (if (re-search-forward "\\*\\{2,3\\}\\(\\w[^*]+\\)\\*\\{2,3\\}" (line-end-position) t)
-      (progn
-        (setq b1 (match-beginning 0))
-        (setq e1 (match-end 0))
-        (setq b2 (match-beginning 1)) ; **asd**
-        (setq e2 (match-end 1))
-        (unless (cui-block--at-special-p b2)
+    ;; old:  "\\*\\{1,3\\}\\([^*\n]+\\)\\*\\{1,3\\}" end t)
+    (while (re-search-forward "\\(\\*\\{1,3\\}\\)\\([^*\n]+?\\)\\1" end t)
+      (setq b1 (match-beginning 0))
+      (setq e1 (match-end 0))
+      (setq b2 (match-beginning 2)) ;; Group 2 is now the text inside the asterisks
+      (setq e2 (match-end 2))
 
+      (unless (cui-block--at-special-p b2)
+        ;; Clean up old properties
+        (remove-text-properties b1 e1 '(face nil org-emphasis))
+        (put-text-property b1 e1 'face (list :inherit '(org-block)))
 
-          ;; Only fontify the marker, not surrounding text
-          (remove-text-properties b1 e1 '(face nil org-emphasis))
-          (put-text-property b1 e1 'face (list :inherit '(org-block)))
+        ;; Apply bolding safely without throwing off the cursor position
+        (save-excursion
           (beginning-of-line)
           (if (looking-at "^\\(#+\\)\\s-+")
               (put-text-property b2 e2 'face 'bold)
             ;; else
-            (add-text-properties
-	     b2 e2
-	     (list 'face
-		   (list :inherit
-			 (append '(bold)
-				 '(org-block))))))
-          (goto-char e1))))
+            (add-text-properties b2 e2 (list 'face (list :inherit '(bold org-block)))))))
+
+      (goto-char e1))
 
     ;; 2. `quote` RosyBrown1
     (goto-char start)
@@ -1705,8 +1702,8 @@ Argument LIM-END cui block ending."
     (prog1 (while (re-search-forward cui-block--chat-prefixes-re lim-end t)
              (setq sbeg (match-beginning 0))
              (setq send (match-end 0))
-             (unless (cui-block--at-special-p send)
-               (put-text-property sbeg send 'face 'cui-chat-role))) ; 'cui-block--me-ai-chat-prefixes-font-face
+             ;; (unless (cui-block--at-special-p send)
+             (put-text-property sbeg send 'face 'cui-chat-role)) ; 'cui-block--me-ai-chat-prefixes-font-face
       (goto-char lim-end))))
 
 (defun cui-block--fontify-latex-blocks (lim-beg lim-end)
@@ -1807,6 +1804,7 @@ TODO: fontify if there is only end of cui block on page."
       (goto-char end))
     ;; required by font lock mode:
     (goto-char limit))) ; return t
+
 
 ;; -=-= Fill-region, paragraph
 

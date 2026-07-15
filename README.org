@@ -364,6 +364,7 @@ We do it in two steps, first we replace image link or tag with ~@image_jpeg:/pat
 - Restore buffer state		https://github.com/Anoncheg1/emacs-unmodified-buffer1
 - outline.el usage		https://github.com/Anoncheg1/emacs-outline-it
 - hiding password in cafe	https://github.com/Anoncheg1/emacs-hidepass
+- TAB key reimplementation	https://github.com/Anoncheg1/emacs-indent
 - Dates for Org-mode headers	https://github.com/Anoncheg1/emacs-org-history
 
 * Donate, sponsor the author
