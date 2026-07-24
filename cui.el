@@ -644,7 +644,8 @@ ORIG-FUN is `cui--org-babel-get-src-block-info-advice' and its ARGS."
 Support only elisp.
 Argument ORIG-FUN is `xref-find-definitions'.
 Optional argument ARGS is `xref-find-definitions' related arguments."
-  (if (bound-and-true-p cui-mode)
+  (if (and (bound-and-true-p cui-mode)
+           (cui-block-p))
       (let* ((beg (car (save-excursion (cui-block--markdown-block-p))))
              (lang (when beg (save-excursion (goto-char beg)
                                              (when (looking-at cui-block--markdown-begin-re)

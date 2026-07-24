@@ -1068,49 +1068,53 @@ Optional ARG may be positive or negative to indicate direction and
    ((save-excursion
       (move-beginning-of-line 1)
       (looking-at cui-block--cui-block-begin-end-re))
-    (cui--debug "cui-block-next-item 1 begin/end")
-    (end-of-line)
-    (while (/= arg 0)
-      (if (> arg 0)
-          (progn
-            (end-of-line)
-            (re-search-forward cui-block--cui-block-begin-end-re nil t)
-            (setq arg (1- arg)))
-        (beginning-of-line)
-        (re-search-backward cui-block--cui-block-begin-end-re nil t)
-        (setq arg (1+ arg)))
-      (beginning-of-line)))
-   ;; markdown-headers
-   ((save-excursion
-      (move-beginning-of-line 1)
-      (looking-at cui-block--markdown-header-re))
-    (cui--debug "cui-block-next-item 2 markdown-headers")
-    (end-of-line)
-    (while (/= arg 0)
-      (if (> arg 0)
-          (progn
-            (end-of-line)
-            (re-search-forward cui-block--markdown-header-re end t)
-            (setq arg (1- arg)))
-        (beginning-of-line)
-        (re-search-backward cui-block--markdown-header-re beg t)
-        (setq arg (1+ arg)))
-      (beginning-of-line)))
-   ;; markdown-block beg/end
-   ((save-excursion
-      (move-beginning-of-line 1)
-      (looking-at cui-block--markdown-beg-end-re))
-    (cui--debug "cui-block-next-item 3 markdown-block-beg/end")
-    (while (/= arg 0)
-      (if (> arg 0)
-          (progn
-            (end-of-line)
-            (re-search-forward cui-block--markdown-beg-end-re end t)
-            (setq arg (1- arg)))
-        (beginning-of-line)
-        (re-search-backward cui-block--markdown-beg-end-re beg t)
-        (setq arg (1+ arg)))
-      (beginning-of-line)))
+    (let ((search-fn (if (> arg 0) #'re-search-forward #'re-search-backward))
+          (step      (if (> arg 0) -1 1))
+          (moved     t))
+      (cui--debug "cui-block-next-item 1 begin/end")
+      (while (and (/= arg 0) moved)
+        (if (> arg 0) (end-of-line) (beginning-of-line))
+        (if (funcall search-fn cui-block--cui-block-begin-end-re nil t)
+            (setq arg (+ arg step))
+          (setq moved nil)))
+      (when moved
+        (beginning-of-line))))
+
+   ;; 1. Markdown Headers Clause
+   ((and (save-excursion
+           (move-beginning-of-line 1)
+           (looking-at cui-block--markdown-header-re))
+         (let ((search-fn (if (> arg 0) #'re-search-forward #'re-search-backward))
+               (bound     (if (> arg 0) end beg))
+               (step     (if (> arg 0) -1 1))
+               (moved     t))
+           (cui--debug "cui-block-next-item 2 markdown-headers")
+           (while (and (/= arg 0) moved)
+             (if (> arg 0) (end-of-line) (beginning-of-line))
+             (if (funcall search-fn cui-block--markdown-header-re bound t)
+                 (setq arg (+ arg step))
+               (setq moved nil)))
+           (when moved
+             (beginning-of-line)
+             t))))
+
+   ;; 2. Markdown Block Beg/End Clause
+   ((and (save-excursion
+           (move-beginning-of-line 1)
+           (looking-at cui-block--markdown-beg-end-re))
+         (let ((search-fn (if (> arg 0) #'re-search-forward #'re-search-backward))
+               (bound     (if (> arg 0) end beg))
+               (step     (if (> arg 0) -1 1))
+               (moved     t))
+           (cui--debug "cui-block-next-item 3 markdown-block-beg/end")
+           (while (and (/= arg 0) moved)
+             (if (> arg 0) (end-of-line) (beginning-of-line))
+             (if (funcall search-fn cui-block--markdown-beg-end-re bound t)
+                 (setq arg (+ arg step))
+               (setq moved nil)))
+           (when moved
+             (beginning-of-line)
+             t))))
    ;; message
    (t
     (cui--debug "cui-block-next-item 4 message")
