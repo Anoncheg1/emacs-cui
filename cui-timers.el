@@ -184,7 +184,7 @@ Called in
 - `cui-timers--interrupt-all-requests' for full stop.
 If Optional argument FAILED is non-nil, then explicitly notify user
 about failure."
-  (cui--debug "cui-timers--stop-global-progress-reporter1 %s %s %s"
+  (cui--debug "cui-timers--stop-global-progress-reporter N1 %s %s %s"
               (current-buffer)
               cui-timers--global-progress-reporter
               cui-timers--global-progress-timer)
@@ -202,11 +202,11 @@ about failure."
 
   ;; clear time
   (when cui-timers--global-progress-timer
-    (cui--debug "cui-timers--stop-global-progress-reporter2"
+    (cui--debug "cui-timers--stop-global-progress-reporter N2"
     (cancel-timer cui-timers--global-progress-timer)
     (setq cui-timers--global-progress-timer nil)
     (setq cui-timers--global-progress-timer-remaining-ticks 0)
-    (cui--debug "cui-timers--stop-global-progress-reporter3 ticks: %s" cui-timers--global-progress-timer-remaining-ticks))))
+    (cui--debug "cui-timers--stop-global-progress-reporter N3 ticks: %s" cui-timers--global-progress-timer-remaining-ticks))))
 
 (defvar cui-timers--cui-update-mode-line (intern "cui-update-mode-line")
   "Dependency injection from in cui.el.")

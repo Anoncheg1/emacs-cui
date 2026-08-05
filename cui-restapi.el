@@ -797,7 +797,7 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
     (cui--debug "cui-restapi--url-request request-data:" (cui-debug--prettify-json-string url-request-data))
 
 
-    (cui--debug "Main request before, that return a \"urllib buffer\".")
+    (cui--debug "cui-restapi--url-request before, that return a \"urllib buffer\".")
     (let ((url-request-buffer
            (url-retrieve ; <- - - - - - - - -  MAIN
             endpoint

@@ -95,8 +95,12 @@ cui-restapi-con-service [[./cui-restapi.el]]
 ** How to connect to not supported service?
 #+begin_src elisp :results none :exports code :eval no
 (plist-put cui-restapi-con-endpoints :local "http://localhost:8000/v1/chat/completions")
-;; Optionally, set it as default
+;; Set token to nil to disable token for :local:
+(setq cui-restapi-con-token
+      (plist-put cui-restapi-con-token :local nil))
+;; Optionally, set it as default service:
 (setq cui-restapi-con-service 'local)
+
 #+end_src
 
 Redefine:
@@ -211,10 +215,13 @@ See ~cui-block-roles-prefixes~ in [[.cui-block.el]] for more info.
 - :temperature - float
 - :frequency-penalty - float
 - :presence-penalty - float
-- :sys-everywhere - string (persistant-sys-prompts) [[./cui-block.el]]
-- :chat :completion - bool
-- :chain - bool [[./cui-prompt.el]]
+- :sys - string - system prompt, see ~cui-block--get-sys~ in [[./cui-block.el]]
+- :chat, :completion, :chain  - bool - specify main function that will handle ~C-c C-c~. For :chain see [[./cui-prompt.el]]
 
+Note: for fast editing :sys parameter in (") double quotes with ~forward-sexp~ function set:
+#+begin_src elisp :lexical t :results none :exports code :eval no
+(modify-syntax-entry ?\" "\"" org-mode-syntax-table) ; make `forward-sexp' and `backward-sexp' functions jump to end of (")
+#+end_src
 * Debugging
 To get full request body and more information set:
 : (setopt cui-debug-buffer "*debug-cui*")
