@@ -578,8 +578,7 @@ once.
       (cui-timers--set url-buffer (cui-block-get-header-marker element))
       ;; - run timer that show /-\ looping, notification of status
       (cui-timers--progress-reporter-run
-       #'cui-restapi--interrupt-url-request)
-      )))
+       #'cui-restapi--interrupt-url-request))))
 
 ;; -=-= Normalize, cui-restapi--url-request
 
