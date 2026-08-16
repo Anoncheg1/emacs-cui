@@ -30,17 +30,50 @@
 ;; emacs -Q --batch -l ert.el -l cui-debug.el -l cui-block.el -l cui-tests-block.el -l cui-tests-integ.el -f ert-run-tests-batch-and-exit
 
 
-(require 'cui-tests-block) ; for `cui-test-setup-buffer'
+;; (add-to-list 'load-path default-directory)
+;; (require 'cui-tests-block) ; for `cui-test-setup-buffer'
+
 (require 'cui)
 (require 'ert)
-
+;; (defvar ert-enabled t)
 
 ;;; Commentary:
 ;;
 
 ;;; Code:
 
+
+
 ;;; - Help functions
+;;;
+(defun cui-test-setup-buffer (block-content &optional buf properties-alist)
+  "Create cui block-CONTENT and optional PROPERTIES-ALIST.
+In current buffer or in BUF.
+PROPERTIES-ALIST should be an alist like ((property-name . \"value\")).
+Set cursor at begining of buffer.
+Returns a list (ELEMENT INFO-ALIST), where ELEMENT is the parsed Cui block
+and INFO-ALIST is the parameters from its header."
+  (with-current-buffer (or buf (current-buffer))
+    (setq-local org-export-with-properties t) ; Ensure properties are considered
+    (when properties-alist
+      (dolist (prop properties-alist)
+        (insert (format "#+PROPERTY: %s %s\n" (car prop) (cdr prop)))))
+    (insert block-content)
+    (goto-char (point-min))
+    ;; Check if #+begin_ai exists to avoid search failure
+    (unless (string-match-p "#\\+begin_ai" block-content)
+      (error "Test setup failed: block-content does not contain '#+begin_ai'"))
+    ;; Move point to the start of the cui block
+    (unless (search-forward "#+begin_ai" nil t)
+      (error "Failed to find '#+begin_ai' in buffer"))
+    (beginning-of-line) ; Ensure point is at the start of the block
+    (when (derived-mode-p 'org-mode)
+      (let* ((element (org-element-at-point)))
+        (unless (eq (org-element-type element) 'special-block)
+          (error "No valid Cui block found at point"))
+        element)))) ; return
+
+
 (defun cui-tests--my-http-server-handler (proc _string)
   "Used for HTTP server as callback.
 PROC is process object.  _STRING is data received."
@@ -145,24 +178,31 @@ PROC is process object.  _STRING is data received."
         (condition-case err
             (progn
               (sleep-for 0.5) ; required
-              (org-ctrl-c-ctrl-c))
+              (org-ctrl-c-ctrl-c)
+              (sleep-for 0.5)
+              ;; (print (list "point" (point)))
+              (should (eq 112 (point)))
+              (should (string-equal (buffer-substring-no-properties (point-min) (point-max) )
+                      "#+begin_ai :stream nil :service test :model none\nTest content\n\n[ai]: Your question needs clarification.\n\n[ME]: \n#+end_ai")
+              ))
           (error
            ;; (print (list "error! delete-process" (buffer-substring-no-properties (line-beginning-position) (line-end-position) )))
            (delete-process "my-http-server")   ; run your code
            (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
            (signal (car err) (cdr err)))) ; re-signal error (does not suppress)
         ))
-    (run-at-time 1 nil (lambda (buf) (with-current-buffer buf
-                                       (should (eq 112 (point)))
-                                       (should (string-equal
-                                                (buffer-substring-no-properties (point-min) (point-max) )
-                                                "#+begin_ai :stream nil :service test :model none\nTest content\n\n[AI]: Your question needs clarification.\n\n[ME]: \n#+end_ai"
-                                                )
-                                               ))
-                         (delete-process "my-http-server")
-                         ;; (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
-                         )
-                 temp-buffer)))
+    ;; (run-at-time 1 nil (lambda (buf) (with-current-buffer buf
+    ;;                                    (should (eq 112 (point)))
+    ;;                                    (should (string-equal
+    ;;                                             (buffer-substring-no-properties (point-min) (point-max) )
+    ;;                                             "#+begin_ai :stream nil :service test :model none\nTest content\n\n[AI]: Your question needs clarification.\n\n[ME]: \n#+end_ai"
+    ;;                                             )
+    ;;                                            ))
+    ;;                      (delete-process "my-http-server")
+    ;;                      ;; (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
+    ;;                      )
+    ;;              temp-buffer)
+    ))
 
 ;;; - Integration test: cui-restapi-request-llm-retries
 
@@ -211,6 +251,36 @@ PROC is process object.  _STRING is data received."
                          (delete-process "my-http-server"))
                  temp-buffer)
     ))
+
+
+(ert-deftest cui-tests-integ-port-not-opened ()
+  "`cui-restapi-request-prepare'."
+  (let ((temp-buffer (generate-new-buffer " *temp*" t)))
+    (with-current-buffer temp-buffer
+      (org-mode)
+      (cui-mode)
+      (cui-test-setup-buffer "#+begin_ai :stream nil :service test :model none\nTest content\n#+end_ai")
+      ;; IDK why but for localhost url-requst dont return error for closed port inside test only
+      (let ((cui-restapi-con-endpoints (list :test "http://127.0.0.1:9230/v1/chat/completions"))
+            (cui-restapi-con-token "test"))
+        (condition-case err
+            (progn
+              (sleep-for 2) ; required
+              (org-ctrl-c-ctrl-c)
+              ;; (sleep-for 0.5)
+              ;; check:
+              (goto-char (cui-block-where-is-result))
+              ;; (print (list "AAAAAAAAAAAAAAA" cui-restapi-show-error-function (cui-block-where-is-result) (point)))
+              ;; (cui--debug (list "wtf" (buffer-substring-no-properties (point) (point-max))))
+              (should (string-equal (buffer-substring-no-properties (point) (point-max))
+                                    "#+RESULTS:\n: Connection failed or port closed for http://127.0.0.1:9230/v1/chat/completions\n"
+                                    ))
+              )
+          (error
+           (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
+           (signal (car err) (cdr err)))) ; re-signal error (does not suppress)
+        ))))
+
 
 (provide 'cui-tests-integ)
 

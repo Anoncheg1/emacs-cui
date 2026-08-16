@@ -31,7 +31,7 @@ emacs -Q --batch --no-site-file -l ert.el -l cui-debug.el -l cui-block.el -l cui
     -l ./tests/cui-tests-cui.el -f ert-run-tests-batch-and-exit || exit 1
 # integ
 emacs -Q --batch --no-site-file -l ert.el -l cui-debug.el -l cui-block.el -l cui-block-msgs.el \
-      -l cui-block-tags.el -l cui-timers.el -l cui-async1.el -l cui-restapi.el -l cui-prompt.el -l cui.el -l ./tests/cui-tests-block.el \
+      -l cui-block-tags.el -l cui-timers.el -l cui-async1.el -l cui-restapi.el -l cui-prompt.el -l cui.el  \
     -l ./tests/cui-tests-integ.el -f ert-run-tests-batch-and-exit || exit 1
 # integllm
 emacs -Q --batch --no-site-file -l ert.el -l cui-debug.el -l cui-block.el -l cui-block-msgs.el \

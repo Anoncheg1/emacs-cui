@@ -566,20 +566,20 @@ once.
                                                                            (cui-restapi--get-single-response-text result)
                                                                            t))))))
     ;; - Call and save buffer.
-    (cui-timers--set
-     (cui-restapi--url-request service model callback
-                          :prompt (when (eql req-type 'completion) content) ; if completion - string
-                          :messages (when (not (eql req-type 'completion)) content) ; chat - vector
-                          :max-tokens max-tokens
-                          :temperature temperature
-                          :top-p top-p
-                          :frequency-penalty frequency-penalty
-                          :presence-penalty presence-penalty
-                          :stream stream)
-     (cui-block-get-header-marker element))
-    ;; - run timer that show /-\ looping, notification of status
-    (cui-timers--progress-reporter-run
-     #'cui-restapi--interrupt-url-request)))
+    (when-let ((url-buffer (cui-restapi--url-request service model callback
+                                                     :prompt (when (eql req-type 'completion) content) ; if completion - string
+                                                     :messages (when (not (eql req-type 'completion)) content) ; chat - vector
+                                                     :max-tokens max-tokens
+                                                     :temperature temperature
+                                                     :top-p top-p
+                                                     :frequency-penalty frequency-penalty
+                                                     :presence-penalty presence-penalty
+                                                     :stream stream)))
+      (cui-timers--set url-buffer (cui-block-get-header-marker element))
+      ;; - run timer that show /-\ looping, notification of status
+      (cui-timers--progress-reporter-run
+       #'cui-restapi--interrupt-url-request)
+      )))
 
 ;; -=-= Normalize, cui-restapi--url-request
 
@@ -604,7 +604,7 @@ Return text of message."
     (if-let ((err-obj (plist-get response 'error)))
         (let ((mes (or (plist-get err-obj 'message)
                            err-obj)))
-            (error mes)) ; not used
+            (error mes))
       ;; else - no "error" field
       (if-let* ((choice (aref (plist-get response 'choices) 0))
                 (text (or (plist-get choice 'text)
@@ -798,6 +798,7 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
 
 
     (cui--debug "cui-restapi--url-request before, that return a \"urllib buffer\".")
+
     (let ((url-request-buffer
            (url-retrieve ; <- - - - - - - - -  MAIN
             endpoint
@@ -824,6 +825,7 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
                 (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--stop-tracking-url-request)
                 ;; (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
                 )))))
+      ;; (sleep-for 0.1)
 
       (cui--debug "Main request after." url-request-buffer)
 
@@ -836,7 +838,7 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
 
         ;; - set current global value as permanent in local buffer.
         (set (make-local-variable 'cui-restapi-show-error-function) (symbol-value 'cui-restapi-show-error-function))
-        (cui--debug "cui-restapi--url-request " cui-restapi-show-error-function)
+        (cui--debug "cui-restapi--url-request error-function: %s" cui-restapi-show-error-function)
 
         ;; - for stream add hook, otherwise remove - do word by word output (optional actually)
         (if stream
@@ -844,6 +846,21 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
               (add-hook 'after-change-functions #'cui-restapi--url-request-on-change-function nil t))
           ;; else - not stream
           (remove-hook 'after-change-functions #'cui-restapi--url-request-on-change-function t)))
+
+      ;; error check
+      (sleep-for 0.1) ; TODO: check this somewhere else, in timer maybe
+      (when (and url-request-buffer (buffer-live-p url-request-buffer))
+        (let ((proc (get-buffer-process url-request-buffer)))
+          ;; If the process failed immediately or isn't running, force-invoke callback
+          (when (and proc (memq (process-status proc) '(exit closed failed)))
+            (setq url-request-buffer nil)
+
+              ;; Position at cui block still
+              (funcall cui-restapi-show-error-function (format "Connection failed or port closed for %s" endpoint)
+                       (cui-block-get-header-marker))
+              (setq url-request-buffer nil) ; return nil
+              )))
+
       url-request-buffer)))
 
 ;; -=-= cui-restapi--url-request-slim
