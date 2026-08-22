@@ -277,20 +277,11 @@ that is why defined as lambda with marker.")
 (defun cui-restapi--debug-urllib (source-buf)
   "Copy `url-http' buffer with response to our debugging buffer.
 Argument SOURCE-BUF url-http response buffer."
-  (when (and source-buf (bound-and-true-p cui-debug-buffer))
-    (save-excursion
-      (let* ((buf-exist (get-buffer cui-debug-buffer))
-             (bu (or buf-exist (get-buffer-create cui-debug-buffer))))
-        (with-current-buffer bu
-          (let ((stri (with-current-buffer source-buf
-                        ;; (save-excursion
-                          (buffer-substring-no-properties (or cui-restapi--url-buffer-last-position-marker
-                                                              (point-min))
-                                                          (point-max)))))
-            (goto-char (point-max))
-            (insert "cui-restapi--debug-urllib response:\n")
-            (insert stri)
-            (newline)))))))
+  (when source-buf
+    (with-current-buffer source-buf
+      (buffer-substring-no-properties (or cui-restapi--url-buffer-last-position-marker
+                                          (point-min))
+                                      (point-max)))))
 
 ;; -=-= Show error
 
@@ -802,22 +793,30 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
            (url-retrieve ; <- - - - - - - - -  MAIN
             endpoint
             (lambda (_events)
-              (cui--debug "cui-restapi--url-request in event" (current-buffer) cui-restapi-show-error-function)
+              (cui--debug "cui-restapi--url-request in event N1 %s %s" (current-buffer) cui-restapi-show-error-function)
+              (cui--debug "cui-restapi--url-request in event N2 %s" _events)
               ;; "Called within url-request-buffer after `after-change-functions'"
               ;; debug
-              (let (cui-restapi--url-buffer-last-position-marker)
-                (cui-restapi--debug-urllib (current-buffer)))
+              (when (bound-and-true-p cui-debug-buffer)
+                (let (cui-restapi--url-buffer-last-position-marker)
+                  (cui--debug "cui-restapi--url-request in event N21 urllib response:"
+                              (cui-restapi--debug-urllib (current-buffer)))))
               ;; error handling and not-stream insert
               (unwind-protect
-                  (when (and (boundp 'url-http-end-of-headers) url-http-end-of-headers)
-                      (unless (cui-restapi--url-maybe-show-request-error) ; t if error
-                        (unless stream
+                  (if (bound-and-true-p url-http-end-of-headers)
+                      ;; t if error
+                      ;; for output use `cui-restapi-show-error-function' with (cui-timers--get-variable (current-buffer))
+                      (unless (cui-restapi--url-maybe-show-request-error)
+                        (unless stream ; for not stream
                           (goto-char url-http-end-of-headers)
                           ;; insert [ME]
                           (funcall cui-restapi--current-url-request-callback
                                    (cui-restapi--json-safe-decoding (buffer-substring-no-properties (point) (point-max))))
                           ;; (funcall cui-restapi--current-url-request-callback nil)
-                          )))
+                          ))
+                    ;; else
+                    (funcall cui-restapi-show-error-function (concat "Connection socket was closed by unknown reason, for " endpoint)
+                              (cui-timers--get-variable (current-buffer))))
 
 
                 ;; finally stop track buffer, error or not
@@ -855,10 +854,9 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
             (setq url-request-buffer nil)
 
               ;; Position at cui block still
-              (funcall cui-restapi-show-error-function (format "Connection failed or port closed for %s" endpoint)
-                       (cui-block-get-header-marker))
-              (setq url-request-buffer nil) ; return nil
-              )))
+              (funcall cui-restapi-show-error-function (format "Connection failed or port was closed for %s" endpoint)
+                       (cui-block-get-header-marker)) ; use current buffer to insert result
+              (setq url-request-buffer nil)))) ; return nil
 
       url-request-buffer)))
 

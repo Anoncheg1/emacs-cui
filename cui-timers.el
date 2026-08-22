@@ -185,6 +185,7 @@ Called in
 If Optional argument FAILED is non-nil, then explicitly notify user
 about failure."
   (cui--debug "cui-timers--stop-global-progress-reporter N1 %s %s %s"
+              failed
               (current-buffer)
               cui-timers--global-progress-reporter
               cui-timers--global-progress-timer)
@@ -193,6 +194,7 @@ about failure."
     (if failed ; timeout
         (progn ; from `url-queue-kill-job'
           ;; (progress-reporter-done cui-timers--global-progress-reporter)
+          (cui--debug "cui-timers--stop-global-progress-reporter N12 failed")
           (progress-reporter-update cui-timers--global-progress-reporter nil "- Connection failed")
           (message (concat cui-timers--global-progress-reporter-waiting-string "- Connection failed")))
       ;; else - echo success
@@ -202,11 +204,11 @@ about failure."
 
   ;; clear time
   (when cui-timers--global-progress-timer
-    (cui--debug "cui-timers--stop-global-progress-reporter N2"
+    (cui--debug "cui-timers--stop-global-progress-reporter N2")
     (cancel-timer cui-timers--global-progress-timer)
     (setq cui-timers--global-progress-timer nil)
-    (setq cui-timers--global-progress-timer-remaining-ticks 0)
-    (cui--debug "cui-timers--stop-global-progress-reporter N3 ticks: %s" cui-timers--global-progress-timer-remaining-ticks))))
+    (cui--debug "cui-timers--stop-global-progress-reporter N3 ticks: %s" cui-timers--global-progress-timer-remaining-ticks)
+    (setq cui-timers--global-progress-timer-remaining-ticks 0)))
 
 (defvar cui-timers--cui-update-mode-line (intern "cui-update-mode-line")
   "Dependency injection from in cui.el.")
@@ -222,19 +224,19 @@ about failure."
   (cui--debug "cui-timers--update-global-progress-reporter N1, dict: %s" cui-timers--element-marker-variable-dict)
   (let* ((buffers (cui-timers--get-all-keys))
          (count (length buffers))
-         (count-live (length (delq nil (mapcar #'buffer-live-p buffers)))))
+         (count-live (length (delq nil (mapcar #'buffer-live-p buffers))))) ; used for debugging here, TODO: check that always same as count
     (cui--debug "cui-timers--update-global-progress-reporter N2, count: %s count-live: %s" count count-live)
-    (let ((count (length (cui-timers--get-all-keys))))
+    ;; (let ((count (length (cui-timers--get-all-keys))))
       ;; (unless cui-timers--cui-update-mode-line ;; Now, we dont show
       ;;   (error "Library cui.el should be loaded to use cui-timers--update-global-progress-reporter function"))
       ;; (funcall cui-timers--cui-update-mode-line count) ;; Now, we dont show
-      (if (eql count 0)
+    (if (eql count 0)
         (cui-timers--stop-global-progress-reporter failed)
-        ;; else
-        (progress-reporter-force-update cui-timers--global-progress-reporter
-                                        nil
-                                        (concat cui-timers--global-progress-reporter-waiting-string
-                                                "[" (number-to-string (length (cui-timers--get-all-keys))) "]"))))))
+      ;; else
+      (progress-reporter-force-update cui-timers--global-progress-reporter
+                                      nil
+                                      (concat cui-timers--global-progress-reporter-waiting-string
+                                              "[" (number-to-string (length (cui-timers--get-all-keys))) "]")))))
 
 (defun cui-timers--interrupt-all-requests (interrupt-request-func &optional failed)
   "Interrup all url requests and stop global timer.
