@@ -122,7 +122,7 @@ like `org-before-first-heading-p'."
   "Go back to beginning of heading, return point or nil.
 Respect message prefixes, cui blocks and --- page separator.
 `org-back-to-heading-or-point-min'."
-  (or (when (cui-optional--markdown-heading-p) (progn (beginning-of-line) (point))) ; for returinging (point)
+  (or (when (cui-optional--markdown-heading-p) (goto-char (line-beginning-position))) ; for returinging (point)
       (let* ((beg-of-message (cui-block--find-next-prev-region -1))
              (page-sep (save-excursion
                         (catch 'result
@@ -158,7 +158,7 @@ Or set cursor at --- or at next chat prefix []: or at the end of chat
 
       (end-of-line)
       (if (re-search-forward (format "^\\(#\\{1,%d\\}\\) " current-level) lim-pos t)
-          (progn (beginning-of-line) (point))
+          (goto-char (line-beginning-position))
         ;; else
         (goto-char lim-pos)
         (beginning-of-line)

@@ -813,7 +813,7 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
                 endpoint
                 (lambda (_events)
                   (cui--debug "cui-restapi--url-request in event N1 %s %s" (current-buffer) cui-restapi-show-error-function)
-                  (cui--debug "cui-restapi--url-request in event N2 %s" _events)
+                  ;; (cui--debug "cui-restapi--url-request in event N2 %s" _events)
                   ;; "Called within url-request-buffer after `after-change-functions'"
                   ;; debug
                   (when (bound-and-true-p cui-debug-buffer)
