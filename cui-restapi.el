@@ -240,7 +240,8 @@ you can override it with: '[SYS]: <your prompt>'."
   :group 'cui)
 
 (defcustom cui-restapi-show-error-function 'cui-block-insert-result-message
-  "Function to display error in cui-restapi about internal and remote errors.
+  "Function to display error with parameters: MESSAGE and HEADER-MARKER.
+Used inn cui-restapi to display internal and remote errors.
 Available choices include:
 - `cui-block-insert-result-message' accept message and header-marker parameters.
 To  use  url-buffer,  get header-marker  with  (cui-timers--get-variable
@@ -566,10 +567,26 @@ once.
                                                      :frequency-penalty frequency-penalty
                                                      :presence-penalty presence-penalty
                                                      :stream stream)))
+
       (cui-timers--set url-buffer (cui-block-get-header-marker element))
+
       ;; - run timer that show /-\ looping, notification of status
+      (cui--debug "cui-restapi-request-prepare N2")
       (cui-timers--progress-reporter-run
-       #'cui-restapi--interrupt-url-request))))
+       #'cui-restapi--interrupt-url-request)
+
+      ;; socket check - cause two messages: this and "Connection socket was closed by unknown reason"
+      ;; (sleep-for 0.1)
+      ;; (when (and url-buffer (buffer-live-p url-buffer))
+      ;;   (let ((proc (get-buffer-process url-buffer)))
+      ;;     ;; If the process failed immediately or isn't running, force-invoke callback
+      ;;     (when (and proc (memq (process-status proc) '(exit closed failed)))
+
+      ;;       ;; Position at cui block still
+      ;;       (funcall cui-restapi-show-error-function (format "Connection failed or port was closed for %s" (cui-restapi--get-endpoint (not (eql req-type 'completion)) service))
+      ;;                (cui-block-get-header-marker)) ; use current buffer to insert result
+      ;;       (setq url-buffer nil))))
+      )))
 
 ;; -=-= Normalize, cui-restapi--url-request
 
@@ -790,73 +807,84 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
     (cui--debug "cui-restapi--url-request before, that return a \"urllib buffer\".")
 
     (let ((url-request-buffer
-           (url-retrieve ; <- - - - - - - - -  MAIN
-            endpoint
-            (lambda (_events)
-              (cui--debug "cui-restapi--url-request in event N1 %s %s" (current-buffer) cui-restapi-show-error-function)
-              (cui--debug "cui-restapi--url-request in event N2 %s" _events)
-              ;; "Called within url-request-buffer after `after-change-functions'"
-              ;; debug
-              (when (bound-and-true-p cui-debug-buffer)
-                (let (cui-restapi--url-buffer-last-position-marker)
-                  (cui--debug "cui-restapi--url-request in event N21 urllib response:"
-                              (cui-restapi--debug-urllib (current-buffer)))))
-              ;; error handling and not-stream insert
-              (unwind-protect
-                  (if (bound-and-true-p url-http-end-of-headers)
-                      ;; t if error
-                      ;; for output use `cui-restapi-show-error-function' with (cui-timers--get-variable (current-buffer))
-                      (unless (cui-restapi--url-maybe-show-request-error)
-                        (unless stream ; for not stream
-                          (goto-char url-http-end-of-headers)
-                          ;; insert [ME]
-                          (funcall cui-restapi--current-url-request-callback
-                                   (cui-restapi--json-safe-decoding (buffer-substring-no-properties (point) (point-max))))
-                          ;; (funcall cui-restapi--current-url-request-callback nil)
-                          ))
-                    ;; else
-                    (funcall cui-restapi-show-error-function (concat "Connection socket was closed by unknown reason, for " endpoint)
-                              (cui-timers--get-variable (current-buffer))))
+           ;; may raise error from url-http with "Could not create connection to 127.0.0.1:9230"
+           (condition-case err
+               (url-retrieve ; <- - - - - - - - -  MAIN
+                endpoint
+                (lambda (_events)
+                  (cui--debug "cui-restapi--url-request in event N1 %s %s" (current-buffer) cui-restapi-show-error-function)
+                  (cui--debug "cui-restapi--url-request in event N2 %s" _events)
+                  ;; "Called within url-request-buffer after `after-change-functions'"
+                  ;; debug
+                  (when (bound-and-true-p cui-debug-buffer)
+                    (let (cui-restapi--url-buffer-last-position-marker)
+                      (cui--debug "cui-restapi--url-request in event N21 urllib response:"
+                                  (cui-restapi--debug-urllib (current-buffer)))))
+                  ;; error handling and not-stream insert
+                  (unwind-protect
+                      (if (bound-and-true-p url-http-end-of-headers)
+                          ;; t if error
+                          ;; for output use `cui-restapi-show-error-function' with (cui-timers--get-variable (current-buffer))
+                          (unless (cui-restapi--url-maybe-show-request-error)
+                            (unless stream ; for not stream
+                              (goto-char url-http-end-of-headers)
+                              ;; insert [ME]
+                              (funcall cui-restapi--current-url-request-callback
+                                       (cui-restapi--json-safe-decoding (buffer-substring-no-properties (point) (point-max))))
+                              ;; (funcall cui-restapi--current-url-request-callback nil)
+                              ))
+                        ;; else
+                        (funcall cui-restapi-show-error-function (concat "Connection socket was closed by unknown reason, for " endpoint)
+                                 (cui-timers--get-variable (current-buffer))))
 
 
-                ;; finally stop track buffer, error or not
-                (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--stop-tracking-url-request)
-                ;; (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
-                )))))
-      ;; (sleep-for 0.1)
+                    ;; finally stop track buffer, error or not
+                    (cui--debug "cui-restapi--url-request in event N3")
+                    (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--stop-tracking-url-request)
+                    ;; (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
+                    )))
+             (error
+              (cui--debug "cui-restapi--url-request Connection error: %s" (error-message-string err))
+              (funcall cui-restapi-show-error-function (concat "Failed to create connection to " endpoint)
+                                 (cui-block-get-header-marker))
+              nil))))
 
       (cui--debug "Main request after." url-request-buffer)
 
       ;; - Set global bariable for functions that called within request-buffer
-      (with-current-buffer url-request-buffer
-        ;; - it is `cui-block--insert-stream-response' or `cui-block--insert-single-response'
-        (setq-local cui-restapi--current-url-request-callback callback)
-        ;; - `cui-restapi--url-request-on-change-function', `cui-restapi--current-request-is-streamed'
-        (setq-local cui-restapi--current-request-is-streamed stream)
+      (when url-request-buffer
+        (with-current-buffer url-request-buffer
+          ;; - it is `cui-block--insert-stream-response' or `cui-block--insert-single-response'
+          (setq-local cui-restapi--current-url-request-callback callback)
+          ;; - `cui-restapi--url-request-on-change-function', `cui-restapi--current-request-is-streamed'
+          (setq-local cui-restapi--current-request-is-streamed stream)
 
-        ;; - set current global value as permanent in local buffer.
-        (set (make-local-variable 'cui-restapi-show-error-function) (symbol-value 'cui-restapi-show-error-function))
-        (cui--debug "cui-restapi--url-request error-function: %s" cui-restapi-show-error-function)
+          ;; - set current global value as permanent in local buffer.
+          (set (make-local-variable 'cui-restapi-show-error-function) (symbol-value 'cui-restapi-show-error-function))
+          (cui--debug "cui-restapi--url-request error-function: %s" cui-restapi-show-error-function)
 
-        ;; - for stream add hook, otherwise remove - do word by word output (optional actually)
-        (if stream
-            (unless (member 'cui-restapi--url-request-on-change-function after-change-functions)
-              (add-hook 'after-change-functions #'cui-restapi--url-request-on-change-function nil t))
-          ;; else - not stream
-          (remove-hook 'after-change-functions #'cui-restapi--url-request-on-change-function t)))
+          ;; - for stream add hook, otherwise remove - do word by word output (optional actually)
+          (if stream
+              (unless (member 'cui-restapi--url-request-on-change-function after-change-functions)
+                (add-hook 'after-change-functions #'cui-restapi--url-request-on-change-function nil t))
+            ;; else - not stream
+            (remove-hook 'after-change-functions #'cui-restapi--url-request-on-change-function t))))
 
-      ;; error check
-      (sleep-for 0.1) ; TODO: check this somewhere else, in timer maybe
-      (when (and url-request-buffer (buffer-live-p url-request-buffer))
-        (let ((proc (get-buffer-process url-request-buffer)))
-          ;; If the process failed immediately or isn't running, force-invoke callback
-          (when (and proc (memq (process-status proc) '(exit closed failed)))
-            (setq url-request-buffer nil)
+      ;; ;; error check
+      ;; ;; require:
+      ;; ;; - url-request-buffer
+      ;; ;; - cui block
+      ;; (sleep-for 0.1)
+      ;; (when (and url-request-buffer (buffer-live-p url-request-buffer))
+      ;;   (let ((proc (get-buffer-process url-request-buffer)))
+      ;;     ;; If the process failed immediately or isn't running, force-invoke callback
+      ;;     (when (and proc (memq (process-status proc) '(exit closed failed)))
+      ;;       (setq url-request-buffer nil)
 
-              ;; Position at cui block still
-              (funcall cui-restapi-show-error-function (format "Connection failed or port was closed for %s" endpoint)
-                       (cui-block-get-header-marker)) ; use current buffer to insert result
-              (setq url-request-buffer nil)))) ; return nil
+      ;;         ;; Position at cui block still
+      ;;         (funcall cui-restapi-show-error-function (format "Connection failed or port was closed for %s" endpoint)
+      ;;                  (cui-block-get-header-marker)) ; use current buffer to insert result
+      ;;         (setq url-request-buffer nil)))) ; return nil
 
       url-request-buffer)))
 
@@ -1067,7 +1095,7 @@ Return t if error happen, otherwise nil.
 If C\\-g was used return nil.
 Uses global variable `cui-restapi-show-error-function'.
 Should be executed in url-buffer only."
-  (cui--debug "cui-restapi--url-maybe-show-request-error1")
+  (cui--debug "cui-restapi--url-maybe-show-request-error N1")
   (save-excursion ; ??
     (let ((http-code (url-http-symbol-value-in-buffer 'url-http-response-status (current-buffer))) ; should be integer, but may not be
           (http-data (if (and (boundp 'url-http-end-of-headers) url-http-end-of-headers)
@@ -1084,13 +1112,13 @@ Should be executed in url-buffer only."
           ret)
       (unless (numberp http-code)
         (setq http-code nil))
-      (cui--debug "cui-restapi--url-maybe-show-request-error2 %s" http-code)
+      (cui--debug "cui-restapi--url-maybe-show-request-error N2 %s" http-code)
       (when (boundp 'url-http-end-of-headers)
-        (cui--debug "cui-restapi--url-maybe-show-request-error22 %s " url-http-end-of-headers))
+        (cui--debug "cui-restapi--url-maybe-show-request-error N22 %s " url-http-end-of-headers))
       (setq ret
             (or
              (when (and http-code (/= http-code 200))
-               (cui--debug "cui-restapi--url-maybe-show-request-error3")
+               (cui--debug "cui-restapi--url-maybe-show-request-error N3")
                (funcall cui-restapi-show-error-function (format "HTTP Error from the service: %s %s \n %s" http-code http-data http-header-first-line)
                         (cui-timers--get-variable (current-buffer))) ; header-marker
                t)
@@ -1109,7 +1137,7 @@ Should be executed in url-buffer only."
                                                                       "Error from the service API:\n\t" mes)
                               (cui-timers--get-variable (current-buffer)))) ; header-marker
                  (error nil)))))
-      (cui--debug "cui-restapi--url-maybe-show-request-error3 %s" ret)
+      (cui--debug "cui-restapi--url-maybe-show-request-error N4 %s" ret)
       ret)))
 
 

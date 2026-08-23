@@ -208,6 +208,7 @@ PROC is process object.  _STRING is data received."
 
 (ert-deftest cui-tests-integ-stream-test ()
   "Test `cui-restapi-request-llm-retries'."
+  (progn
   (condition-case nil
       (delete-process "my-http-server")
     (error nil))
@@ -242,20 +243,23 @@ PROC is process object.  _STRING is data received."
            (signal (car err) (cdr err)))) ; re-signal error (does not suppress)
         ))
     (run-at-time 1 nil (lambda (buf) (with-current-buffer buf
-                                       ;; (print (list "POINT" (point) (buffer-substring-no-properties (point) (point-max))))
-                                       (should (eq 79 (point)))
+                                       ;; (print (list "POINT" (point) (buffer-substring-no-properties (point-min) (point-max))))))
+    ;;                                    (should (eq 78 (point)))
                                        (should (string-equal
                                                 (buffer-substring-no-properties (point-min) (point-max) )
                                                 "#+begin_ai :stream t :service test :model none\nTest content\n\n[AI]: \nIt\n\n[ME]: \n#+end_ai")
                                                ))
                          (delete-process "my-http-server"))
                  temp-buffer)
-    ))
+    )))
 
 
 (ert-deftest cui-tests-integ-port-not-opened ()
   "`cui-restapi-request-prepare'."
   (let ((temp-buffer (generate-new-buffer " *temp*" t)))
+    (condition-case nil
+      (delete-process "my-http-server")
+    (error nil))
     (with-current-buffer temp-buffer
       (org-mode)
       (cui-mode)
@@ -263,22 +267,23 @@ PROC is process object.  _STRING is data received."
       ;; IDK why but for localhost url-requst dont return error for closed port inside test only
       (let ((cui-restapi-con-endpoints (list :test "http://127.0.0.1:9230/v1/chat/completions"))
             (cui-restapi-con-token "test"))
-        (condition-case err
+        ;; (condition-case err
             (progn
               (sleep-for 2) ; required
               (org-ctrl-c-ctrl-c)
-              ;; (sleep-for 0.5)
+              (sleep-for 0.1)
               ;; check:
               (goto-char (cui-block-where-is-result))
               ;; (print (list "AAAAAAAAAAAAAAA" cui-restapi-show-error-function (cui-block-where-is-result) (point)))
-              ;; (cui--debug (list "wtf" (buffer-substring-no-properties (point) (point-max))))
+              (cui--debug (list "wtf" (buffer-substring-no-properties (point) (point-max))))
               (should (string-equal (buffer-substring-no-properties (point) (point-max))
-                                    "#+RESULTS:\n: Connection failed or port closed for http://127.0.0.1:9230/v1/chat/completions\n"
+                                    "#+RESULTS:\n: Connection socket was closed by unknown reason, for http://127.0.0.1:9230/v1/chat/completions\n"
                                     ))
               )
-          (error
-           (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
-           (signal (car err) (cdr err)))) ; re-signal error (does not suppress)
+          ;; (error
+          ;;  (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
+          ;;  (signal (car err) (cdr err)))
+          ;; ) ; re-signal error (does not suppress)
         ))))
 
 

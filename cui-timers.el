@@ -221,7 +221,7 @@ Called from
 `cui-timers--interrupt-all-requests'.
 If Optional argument FAILED is non-nil, then explicitly notify user
 about failure."
-  (cui--debug "cui-timers--update-global-progress-reporter N1, dict: %s" cui-timers--element-marker-variable-dict)
+  (cui--debug "cui-timers--update-global-progress-reporter N1, failed:, dict: %s %s" failed cui-timers--element-marker-variable-dict)
   (let* ((buffers (cui-timers--get-all-keys))
          (count (length buffers))
          (count-live (length (delq nil (mapcar #'buffer-live-p buffers))))) ; used for debugging here, TODO: check that always same as count
@@ -247,19 +247,19 @@ Called from
 `cui-timers--progress-reporter-run' by global timer.
 If Optional argument FAILED is non-nil, then explicitly notify user
 about failure."
-  (cui--debug "cui-timers--interrupt-all-requests1 %s %s" cui-timers--element-marker-variable-dict failed)
+  (cui--debug "cui-timers--interrupt-all-requests N1 %s %s" cui-timers--element-marker-variable-dict failed)
   (when-let ((buffers (cui-timers--get-all-keys)))
-    (cui--debug "cui-timers--interrupt-all-requests2 %s" buffers)
+    (cui--debug "cui-timers--interrupt-all-requests N2 %s" buffers)
     ;; stop requests
     (mapc (lambda (url-buffer)
             (funcall interrupt-request-func url-buffer))
           buffers))
-  (cui--debug "cui-timers--interrupt-all-requests3")
+  (cui--debug "cui-timers--interrupt-all-requests n3")
   ;; clear list
   (setq cui-timers--element-marker-variable-dict nil)
 
   ;; stop global timer
-  (cui--debug "cui-timers--interrupt-all-requests4")
+  (cui--debug "cui-timers--interrupt-all-requests N4")
   (cui-timers--update-global-progress-reporter failed)
   ;; (cui--debug "cui-timers--interrupt-all-requests5")
   )
