@@ -576,16 +576,18 @@ once.
        #'cui-restapi--interrupt-url-request)
 
       ;; socket check - cause two messages: this and "Connection socket was closed by unknown reason"
-      ;; (sleep-for 0.1)
-      ;; (when (and url-buffer (buffer-live-p url-buffer))
-      ;;   (let ((proc (get-buffer-process url-buffer)))
-      ;;     ;; If the process failed immediately or isn't running, force-invoke callback
-      ;;     (when (and proc (memq (process-status proc) '(exit closed failed)))
+      (sleep-for 0.3)
+      (when (and url-buffer (buffer-live-p url-buffer) (cui-timers--get-variable url-buffer))
+        (let ((proc (get-buffer-process url-buffer)))
+          ;; If the process failed immediately or isn't running, force-invoke callback
+          (when (and proc (memq (process-status proc) '(exit closed failed)))
 
-      ;;       ;; Position at cui block still
-      ;;       (funcall cui-restapi-show-error-function (format "Connection failed or port was closed for %s" (cui-restapi--get-endpoint (not (eql req-type 'completion)) service))
-      ;;                (cui-block-get-header-marker)) ; use current buffer to insert result
-      ;;       (setq url-buffer nil))))
+            ;; Position at cui block still
+            (funcall cui-restapi-show-error-function (format "Connection failed or port was closed for %s" (cui-restapi--get-endpoint (not (eql req-type 'completion)) service))
+                     (cui-block-get-header-marker)) ; use current buffer to insert result
+            ;; (setq url-buffer nil)
+            (cui-timers--interrupt-current-request url-buffer #'cui-restapi--stop-tracking-url-request)
+            )))
       )))
 
 ;; -=-= Normalize, cui-restapi--url-request
