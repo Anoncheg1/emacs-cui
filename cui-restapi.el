@@ -586,9 +586,7 @@ once.
             (funcall cui-restapi-show-error-function (format "Connection failed or port was closed for %s" (cui-restapi--get-endpoint (not (eql req-type 'completion)) service))
                      (cui-block-get-header-marker)) ; use current buffer to insert result
             ;; (setq url-buffer nil)
-            (cui-timers--interrupt-current-request url-buffer #'cui-restapi--stop-tracking-url-request)
-            )))
-      )))
+            (cui-timers--interrupt-current-request url-buffer #'cui-restapi--stop-tracking-url-request)))))))
 
 ;; -=-= Normalize, cui-restapi--url-request
 
