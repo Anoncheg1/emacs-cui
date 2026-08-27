@@ -122,7 +122,9 @@ like `org-before-first-heading-p'."
   "Go back to beginning of heading, return point or nil.
 Respect message prefixes, cui blocks and --- page separator.
 `org-back-to-heading-or-point-min'."
-  (or (when (cui-optional--markdown-heading-p) (goto-char (line-beginning-position))) ; for returinging (point)
+  (or (when (cui-optional--markdown-heading-p)
+        (let ((lbp (line-beginning-position))) ; returns point
+          (goto-char lbp)))
       (let* ((beg-of-message (cui-block--find-next-prev-region -1))
              (page-sep (save-excursion
                         (catch 'result
@@ -338,7 +340,8 @@ to preserve original buffer point and narrowing state."
 
 (defun cui-optional-markdown-folding-shifttab-advice (orig-fun &rest args)
   "Advice for cycle markdown headers in cui block with Shift-TAB.
-ORIG-FUN is `org-shifttab' with its ARGS."
+ORIG-FUN is `org-shifttab' with its ARGS.
+TODO: May cause error at org-element--parse-to at re-search-forward."
   (cui--debug "cui-optional-markdown-folding-shifttab-advice N1") ; %s %s" (bound-and-true-p cui-mode) (cui-block-p))
   (if (and (bound-and-true-p cui-mode)
            ;; if there is markdown headers in cui block
