@@ -341,7 +341,7 @@ to preserve original buffer point and narrowing state."
 (defun cui-optional-markdown-folding-shifttab-advice (orig-fun &rest args)
   "Advice for cycle markdown headers in cui block with Shift-TAB.
 ORIG-FUN is `org-shifttab' with its ARGS.
-TODO: May cause error at org-element--parse-to at re-search-forward."
+TODO: May cause error at `org-element--parse-to' at `re-search-forward'."
   (cui--debug "cui-optional-markdown-folding-shifttab-advice N1") ; %s %s" (bound-and-true-p cui-mode) (cui-block-p))
   (if (and (bound-and-true-p cui-mode)
            ;; if there is markdown headers in cui block
