@@ -279,6 +279,7 @@ Called from
 
   (if (sequencep url-buffer) ;; if several
       (mapc (lambda (b)
+              ;; we should remove buffer from dict first, because in event we dont hand event if buffer not in dict.
               (cui-timers--remove-key b)
               (cui--debug "cui-timers--interrupt-current-request lambda")
               (funcall interrupt-request-func b))

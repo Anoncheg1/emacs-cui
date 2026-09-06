@@ -1534,7 +1534,21 @@ Argument START and END are limits for searching."
                        (not (string-match-p "```" lang))
                        (fboundp (org-src-get-lang-mode lang))) ; for org-src-font-lock-fontify-block
               ;; - fontify code inside markdown block
-              (org-src-font-lock-fontify-block lang block-begin block-end)
+              ;; Fix for `org-src-font-lock-fontify-block' it should call `org-src-preserve-indentation-p' with mode,
+              ;;  to not call `org-element-at-point'.
+              ;; Debugger entered--Lisp error: (error "Invalid search bound (wrong side of point)")
+              ;;   re-search-forward()
+              ;;   org-element-paragraph-parser()
+              ;;   #f(compiled-function ()
+              ;;   org-element--parse-to()
+              ;;   org-element-at-point()
+              ;;   org-src-preserve-indentation-p()
+              ;;   org-src-font-lock-fontify-block(#("elisp")
+              ;;   cui-block--fontify-markdown-subblocks()
+              ;;   cui-block--font-lock-fontify-markdown-blocks()
+              (cl-letf (((symbol-function 'org-src-preserve-indentation-p)
+                         (lambda (&rest args) t)))
+                (org-src-font-lock-fontify-block lang block-begin block-end))
               ;; - text property
               (put-text-property block-begin block-end
                                  'cui-markdown-block t)

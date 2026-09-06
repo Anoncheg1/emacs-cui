@@ -821,28 +821,29 @@ Use argument SERVICE to find endpoint, MODEL as parameter to request."
                       (cui--debug "cui-restapi--url-request in event N21 urllib response:"
                                   (cui-restapi--debug-urllib (current-buffer)))))
                   ;; error handling and not-stream insert
-                  (unwind-protect
-                      (if (bound-and-true-p url-http-end-of-headers)
-                          ;; t if error
-                          ;; for output use `cui-restapi-show-error-function' with (cui-timers--get-variable (current-buffer))
-                          (unless (cui-restapi--url-maybe-show-request-error)
-                            (unless stream ; for not stream
-                              (goto-char url-http-end-of-headers)
-                              ;; insert [ME]
-                              (funcall cui-restapi--current-url-request-callback
-                                       (cui-restapi--json-safe-decoding (buffer-substring-no-properties (point) (point-max))))
-                              ;; (funcall cui-restapi--current-url-request-callback nil)
-                              ))
-                        ;; else
-                        (funcall cui-restapi-show-error-function (concat "Connection socket was closed by unknown reason, for " endpoint)
-                                 (cui-timers--get-variable (current-buffer))))
+                  (when (cui-timers--get-variable (current-buffer)) ; if not in dict then was interrupted with  C-g and we dont handle it
+                    (unwind-protect
+                        (if (bound-and-true-p url-http-end-of-headers)
+                            ;; t if error
+                            ;; for output use `cui-restapi-show-error-function' with (cui-timers--get-variable (current-buffer))
+                            (unless (cui-restapi--url-maybe-show-request-error)
+                              (unless stream ; for not stream
+                                (goto-char url-http-end-of-headers)
+                                ;; insert [ME]
+                                (funcall cui-restapi--current-url-request-callback
+                                         (cui-restapi--json-safe-decoding (buffer-substring-no-properties (point) (point-max))))
+                                ;; (funcall cui-restapi--current-url-request-callback nil)
+                                ))
+                          ;; else
+                          (funcall cui-restapi-show-error-function (concat "Connection socket was closed by unknown reason, for " endpoint)
+                                   (cui-timers--get-variable (current-buffer))))
 
 
-                    ;; finally stop track buffer, error or not
-                    (cui--debug "cui-restapi--url-request in event N3")
-                    (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--stop-tracking-url-request)
-                    ;; (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
-                    )))
+                      ;; finally stop track buffer, error or not
+                      (cui--debug "cui-restapi--url-request in event N3")
+                      (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--stop-tracking-url-request)
+                      ;; (cui-timers--interrupt-current-request (current-buffer) #'cui-restapi--interrupt-url-request)
+                      ))))
              (error
               (cui--debug "cui-restapi--url-request Connection error: %s" (error-message-string err))
               (funcall cui-restapi-show-error-function (concat "Failed to create connection to " endpoint)
