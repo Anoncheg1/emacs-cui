@@ -1547,7 +1547,7 @@ Argument START and END are limits for searching."
               ;;   cui-block--fontify-markdown-subblocks()
               ;;   cui-block--font-lock-fontify-markdown-blocks()
               (cl-letf (((symbol-function 'org-src-preserve-indentation-p)
-                         (lambda (&rest args) t)))
+                         (lambda (&rest _args) t)))
                 (org-src-font-lock-fontify-block lang block-begin block-end))
               ;; - text property
               (put-text-property block-begin block-end
