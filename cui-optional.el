@@ -160,7 +160,8 @@ Or set cursor at --- or at next chat prefix []: or at the end of chat
 
       (end-of-line)
       (if (re-search-forward (format "^\\(#\\{1,%d\\}\\) " current-level) lim-pos t)
-          (goto-char (line-beginning-position))
+          (let ((lbp (line-beginning-position))) ; returns point
+            (goto-char lbp))
         ;; else
         (goto-char lim-pos)
         (beginning-of-line)
