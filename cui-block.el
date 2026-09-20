@@ -39,7 +39,6 @@
 ;; - replace all cl-lib with built-in Elisp code
 ;; - simplify some functions
 ;; - get rid of lambdas.
-;; - ### without text break highlighting for [ME]:
 
 ;;; Code:
 ;; -=-= includes
@@ -148,9 +147,11 @@ TODO: for streaming: save and pass begining of paragraph or line."
 
 ;; -=-= faces
 (defface cui-block-quote
-    '((((class color) (min-colors 88) (background dark)) :background "#282828" :foreground "shadow")
+    '((((class color) (min-colors 88) (background dark))  :background "#282828" :foreground "shadow")
       (((class color) (min-colors 88) (background light)) :background "#eeeeee" :foreground "gray")
-      (((class color) (min-colors 8)) (:background "cyan" :foreground "black"))
+
+      (((class color) (min-colors 8) (background dark))  :foreground "cyan") ; :background "cyan" :foreground "black"
+      (((class color) (min-colors 8) (background light)) :foreground "yellow")
       (t :background "gray" :extend t))
   "Face for single markdown quoted text."
   :group 'cui-faces)
@@ -227,7 +228,8 @@ In `cui-block-roles-prefixes'.")
 (defvar cui-block--chat-prefixes-re "^[\s\t]*\\[\\([^\]]+\\)\\(:\\]\\|\\]:\\)\\s-*"
   "Prefix should be at the begining of the line with spaces or without.
 Or roles regex.")
-(defvar cui-block--markdown-header-re "^\\(#+\\)\\s-+\\([0-9a-zA-Z][).]\\)?\\s-*\\(.*\\)$"
+;; (defvar cui-block--markdown-header-re "^\\(#+\\)\\s-+\\([0-9a-zA-Z][).]\\)?\\s-*\\(.*\\)$"
+(defvar cui-block--markdown-header-re "^\\(#+\\)[ \t]+\\([0-9a-zA-Z][).]\\)?[ \t]*\\(.*\\)$"
   "Match markdown headers starting with one or more # character.
 Used for highlighting and for jumping.")
 
