@@ -145,7 +145,7 @@ Or set cursor at --- or at next chat prefix []: or at the end of chat
   (when (cui-optional--markdown-back-to-heading)
     (let* ((current-level (save-excursion
                             (beginning-of-line)
-                            (if (looking-at "^\\(#+\\) ")
+                            (if (looking-at cui-block--markdown-header-re)
                                 (length (match-string 1))
                               1)))
            (end-of-message (save-excursion
@@ -154,11 +154,13 @@ Or set cursor at --- or at next chat prefix []: or at the end of chat
                        (catch 'result
                          (while (re-search-forward "^---" end-of-message t)
                            (when (save-excursion (not (cui-block--markdown-block-p)))
+                             (forward-line)
                              (throw 'result (line-beginning-position))))
-                         nil)))
-           (lim-pos (min end-of-message (or page-sep (point-max))))) ; if not found, return nil
+                         nil))) ; pointer or nil
+           (lim-pos (min end-of-message (or page-sep end-of-message (point-max))))) ; if not found, return nil
 
       (end-of-line)
+      (cui--debug "cui-optional--markdown-end-of-subtree current-level=%s lim-pos=%s" current-level lim-pos)
       (if (re-search-forward (format "^\\(#\\{1,%d\\}\\) " current-level) lim-pos t)
           (let ((lbp (line-beginning-position))) ; returns point
             (goto-char lbp))
@@ -245,6 +247,7 @@ Only works in `org-mode'.
 `org-fold-folded-p'.
 Return t if success."
   (interactive)
+  (cui--debug "cui-optional-markdown-cycle")
   (when (and (derived-mode-p 'org-mode)
              (cui-block-p)
              (cui-optional--markdown-heading-p))
