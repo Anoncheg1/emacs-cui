@@ -161,13 +161,20 @@ Or set cursor at --- or at next chat prefix []: or at the end of chat
 
       (end-of-line)
       (cui--debug "cui-optional--markdown-end-of-subtree current-level=%s lim-pos=%s" current-level lim-pos)
-      (if (re-search-forward (format "^\\(#\\{1,%d\\}\\) " current-level) lim-pos t)
-          (let ((lbp (line-beginning-position))) ; returns point
-            (goto-char lbp))
+      (or (catch 'done
+            (while (re-search-forward (format "^\\(#\\{1,%d\\}\\) " current-level) lim-pos t)
+              (when (not (save-excursion
+                           (move-beginning-of-line 1)
+                           (cui-block--markdown-block-p)))
+                (throw 'done (let ((lbp (line-beginning-position))) ; returns point
+                               (goto-char lbp)))))
+            nil)
+
         ;; else
-        (goto-char lim-pos)
-        (beginning-of-line)
-        (point)))))
+        (progn
+          (goto-char lim-pos)
+          (beginning-of-line)
+          (point))))))
 
 ;; -=-= Markdown: folding - cycling
 
