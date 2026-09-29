@@ -1066,6 +1066,7 @@ Optional ARG should be positiove, 1 mean previous message."
   (interactive "^p")
   (cui-block-next-message (- (or arg 1))))
 
+
 (defun cui-block-next-item (&optional arg)
   "Jump forward/backward by items, item type detected by cursor position.
 Optional ARG may be positive or negative to indicate direction and
@@ -1086,11 +1087,12 @@ steps."
      ((save-excursion
         (move-beginning-of-line 1)
         (looking-at cui-block--cui-block-begin-end-re))
-      (cui--debug "cui-block-next-item 1 begin/end")
+      (cui--debug "cui-block-next-item 1 begin/end %s" (/= arg 0))
+      (if forward (end-of-line) (beginning-of-line))
       (while (and (/= arg 0)
-                  (if forward (end-of-line) (beginning-of-line))
                   (funcall search-fn
                            cui-block--cui-block-begin-end-re bound t))
+        (cui--debug "cui-block-next-item 1 begin/end FFF")
         (setq arg (+ arg step))
         (setq moved t))
       (when moved (beginning-of-line)))
@@ -1145,6 +1147,13 @@ steps."
      (t
       (cui--debug "cui-block-next-item 4 message")
       (cui-block-next-message arg)))))
+
+
+(defun cui-block-previous-item (&optional arg)
+  "Jump backward by items, item type detected by cursor position.
+ARG should be positive number or nil."
+  (interactive "^p")
+  (cui-block-next-item (- (or arg 1))))
 
 ;; -=-= Interactive: mark-at-point
 
