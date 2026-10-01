@@ -1091,8 +1091,8 @@ steps."
       (if forward (end-of-line) (beginning-of-line))
       (while (and (/= arg 0)
                   (funcall search-fn
-                           cui-block--cui-block-begin-end-re bound t))
-        (cui--debug "cui-block-next-item 1 begin/end FFF")
+                           cui-block--cui-block-begin-end-re nil t))
+        (cui--debug "cui-block-next-item 1.1 begin/end FFF")
         (setq arg (+ arg step))
         (setq moved t))
       (when moved (beginning-of-line)))
