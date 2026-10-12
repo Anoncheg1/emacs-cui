@@ -1265,7 +1265,7 @@ Called from:
 Optional CUI-BLOCK-MARKERS argument used to prevent loop.
 Return modified string with text properties or the same string
 or vector if content have links to images."
-  (cui--debug "cui-block-tags-replace N0 %s" string)
+  (cui--debug "cui-block-tags-replace N0")
   ;; - "@Backtrace" substring exist - replace the last one only
   ;; Result will be *Wrapped in markdown*
   (let ((i 9))
@@ -1323,17 +1323,22 @@ or vector if content have links to images."
   (let ((matches '()) ;; (beg_pos end_pos substring)
         (start 0))
     ;; Collect all matches up front
+    (cui--debug "cui-block-tags-replace N20 %s" string)
     (while (string-match cui-block-tags--org-link-any-re string start)
       ;; check if not in ``` multiline markdown block
       (let ((b (match-beginning 0))
             (e (match-end 0))
             (s (match-string 0 string)))
+        (cui--debug "cui-block-tags-replace N21 %s %s" b e s)
         (unless (or (cui-block-tags--markdown-block-string-p string b)
                     (cui-block-tags--string-is-quoted-p string b))
           ;; include description
-          (when-let ((r (string-match "\\]\\[\\[.*?\\]\\]" string e)))
-            (when (zerop r)
-              (setq e (match-end 0))))
+          ;; (cui--debug "cui-block-tags-replace N22 %s" e string (substring string e))
+          (when (> (length string) e)
+            (when-let ((r (string-match "\\]\\[\\[.*?\\]\\]" (substring string (1+ e)))))
+              (when (zerop r)
+                (cui--debug "cui-block-tags-replace N23 %s" r)
+                (setq e (+ (1+ e) (match-end 0))))))
 
           (push (list b e s) matches))
 
@@ -1354,7 +1359,7 @@ or vector if content have links to images."
                       replacement
                       (substring string end))))))
 
-  (cui--debug "cui-block-tags-replace N5" string)
+  (cui--debug "cui-block-tags-replace N5")
   string) ; return
 
 ;; Usage:

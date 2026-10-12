@@ -296,7 +296,7 @@ asdas
 ---
 
 5555")
-          ;; - Two links and with description in the first link:
+          ;; - Two links and with description in first link:
           (setq res3  (cui-block-tags-replace  "11[[1::* headline][description]]4444[[1::* headline]]5555"))
           ;; (print res3)))
           (should (string-equal target res3)))
