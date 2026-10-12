@@ -119,11 +119,13 @@ Arguments: type, role-text, pos, buffer
 
 (defcustom cui-block-parse-part-hook nil
   "Run before request preparation after splitting cui block to chat messages.
-Call hook function with raw string of current block after role prefix.
- Implemented as a list of functions that called with two argument
- content string after prefix and role prefix as a symbol from from
- `cui-block-roles-prefixes'.  Executed from left to right and pass
- result content string to each other."
+Accept two arguemnts, return modified first argument.
+Hook should accept two parameters:
+- message content - raw string of after role prefix.
+- role prefix as a symbol from from `cui-block-roles-prefixes'.
+Implemented as a list of functions that called with two arguments but resu
+Executed from left to right and pass it result value as content
+ arguments string to next."
   :type 'hook
   :group 'cui)
 
@@ -522,7 +524,8 @@ Optional argument NOT-CLEAR-PROPERTIES, prevent cleaning of properties,
   "Process INIT-VAL through a pipeline of functions FUNCS.
 Each function in FUNCS is called as (func val &rest ARGS), where VAL is
  the result of previous function (or INIT-VAL for the first), and ARGS
- are optional additional arguments supplied to this function.
+ are optional additional arguments supplied to each function.
+So only first argument modified by functions.
 Used for `cui-restapi-after-prepare-messages-hook'.
 Returns the result of the final function in FUNCS, or INIT-VAL if FUNCS
  is nil."

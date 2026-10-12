@@ -41,7 +41,7 @@
 
 ;;; Code:
 
-;; -=-= remove-distant-empty-lines hook
+;; -=-= remove-distant-empty-lines hook - after-receive
 (defun cui-optional-remove-distant-empty-lines (beg)
   "Remove excessibe empty lines from BEG to current position.
 Don't remove empty lines that have more than two lines in a row before
@@ -75,38 +75,54 @@ Arguments TYPE CONTENT BEFORE-POS STREAM parameters described in
       ;; else - not stream
       (cui-optional-remove-distant-empty-lines before-pos))))
 
-;; -=-= remove-headers hook
-(defun cui-optional-remove-headers (beg-pos end-pos)
-  "Remove Org mode header prefixes, like ^**.
-You may require this, because  LLMs frequently uses markdown for headers
-that recognized in Org mode as headers, that break blocks.
-Works at every line between BEG-POS and END-POS in the current buffer.
-Uses `org-outline-regexp-bol' to match headers, respecting
-user-configured prefixes."
-  (interactive "r")
-  (replace-regexp-in-region org-outline-regexp-bol "" beg-pos end-pos))
-
+;; -=-= remove-headers hook - after-receive
+(defun cui-add-char-before-org-outline-regexp-bol
+    (&optional char re beg end)
+  "Insert CHAR before each match of RE between BEG and END.
+CHAR defaults to \" \", RE to `org-outline-regexp-bol'.
+Interactively the region must be active; no prompting.
+Returns the number of replacements, or nil if RE did not match."
+  (interactive
+   (list nil nil
+         (or (and (use-region-p) (region-beginning))
+             (user-error "Active region required"))
+         (region-end)))
+  (replace-regexp-in-region (or re org-outline-regexp-bol)
+                            (concat (or char " ") "\\&")
+                            beg end))
 
 (defun cui-optional-remove-headers-hook-function (type _content before-pos _stream)
   "Ready for usage in `cui-block-after-chat-insertion-hook'.
 Remove Org headers between BEFORE-POS and current position in current
- buffer buffer by adding space before it.
+buffer by adding space before it.
 TYPE _CONTENT BEFORE-POS BUF parameters described in
 `cui-block-after-chat-insertion-hook' hook.
 Should be added the last to be executed first."
   (cui--debug "cui-optional-remove-headers-hook-function HOOK: %s %s %s %s"
-              before-pos
-              (point)
-              type
-              (type-of type))
+              before-pos (point) type (type-of type))
   (when (member type '(text end))
-    (save-excursion
-      (let ((end (point-marker)))
-        (goto-char before-pos)
-        (while (re-search-forward org-outline-regexp-bol (marker-position end) t)
-          (beginning-of-line)
-          (insert " ") ; this effectively quote standard headers
-          (end-of-line))))))
+    (cui-add-char-before-org-outline-regexp-bol
+     " " org-outline-regexp-bol before-pos (point))))
+
+;; -=-= remove-indentation hook - pre-send
+(defun cui-optional-my-dedent-spaces (text)
+  "Remove common leading spaces from TEXT."
+  (let ((lines (split-string text "\n"))
+        (min-indent nil))
+    ;; Pass 1: minimum leading-space count over non-blank lines.
+    (dolist (line lines)
+      (unless (string-match-p "\\` *\\'" line) ; all spaces
+        (let ((indent (string-match "[^ ]" line)))  ; nil if all spaces
+        (setq indent (or indent (length line)))
+          (setq min-indent (if min-indent (min min-indent indent) indent)))))
+
+    (cond
+     ((or (null min-indent) (zerop min-indent)) text)
+     (t
+      (mapconcat
+       (lambda (line)
+           (substring line (min (length (string-trim-left line "")) min-indent)))
+       lines "\n")))))
 
 ;; -=-= Markdown: folding - healping funcs
 
@@ -314,9 +330,6 @@ Collapses text below the highest-level headline found in each field."
 
                   (cui--debug "cui-optional-cycle-content-by-block-fields N32")
                   (goto-char end))))))))
-
-
-
 
 
 (defun cui-optional-cycle-block ()

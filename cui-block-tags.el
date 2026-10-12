@@ -1319,30 +1319,42 @@ or vector if content have links to images."
   ;; more exist we skip the first  one that found. if no other
   ;; exist we replace it.
   ;; *Dont Wrap in markdown*
-  (let ((matches '())
+  (cui--debug "cui-block-tags-replace N2")
+  (let ((matches '()) ;; (beg_pos end_pos substring)
         (start 0))
     ;; Collect all matches up front
     (while (string-match cui-block-tags--org-link-any-re string start)
       ;; check if not in ``` multiline markdown block
-      (unless (or (cui-block-tags--markdown-block-string-p string (match-beginning 0))
-                  (cui-block-tags--string-is-quoted-p string (match-beginning 0)))
-        (push (cons (match-string 0 string) (match-beginning 0)) matches))
-      (setq start (match-end 0)))
+      (let ((b (match-beginning 0))
+            (e (match-end 0))
+            (s (match-string 0 string)))
+        (unless (or (cui-block-tags--markdown-block-string-p string b)
+                    (cui-block-tags--string-is-quoted-p string b))
+          ;; include description
+          (when-let ((r (string-match "\\]\\[\\[.*?\\]\\]" string e)))
+            (when (zerop r)
+              (setq e (match-end 0))))
+
+          (push (list b e s) matches))
+
+        (cui--debug "cui-block-tags-replace N4 %s %s %s" b e s)
+        (setq start e))) ; while
     ;; Sort in reverse: safest for substring replacement
-    (setq matches (sort matches (lambda (a b) (> (cdr a) (cdr b)))))
+    (setq matches (sort matches (lambda (a b) (> (car a) (car b)))))
     (dolist (match matches)
-      (let* ((link (car match))
-             (pos (cdr match))
-             (end (+ pos (length link)))
+      (let* ((pos (car match))
+             (end (cadr match))
+             (link (caddr match)) ; shorter than pos-end
              (replacement (cui-block-tags--get-replacement-for-org-link link cui-block-markers))
              (replacement (concat replacement "\n")))
-        ;; Replace in the string
+        (cui--debug "cui-block-tags-replace N4 %s %s %s" link pos end)
+        ;; Replace in the string: pos - end
         (setq string (concat
                       (substring string 0 pos)
                       replacement
                       (substring string end))))))
 
-  (cui--debug "cui-block-tags-replace N4" string)
+  (cui--debug "cui-block-tags-replace N5" string)
   string) ; return
 
 ;; Usage:

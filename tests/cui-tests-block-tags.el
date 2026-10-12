@@ -273,6 +273,7 @@ asdas
 
 4444")
           (setq res1 (cui-block-tags-replace "11[[file:/mock/org.org::1::* headline]]4444"))
+          ;; (print res1)))
           (should (string-equal target res1))
 
           (setq res2  (cui-block-tags-replace  "11[[1::* headline]]4444"))
@@ -295,7 +296,9 @@ asdas
 ---
 
 5555")
-          (setq res3  (cui-block-tags-replace  "11[[1::* headline]]4444[[1::* headline]]5555"))
+          ;; - Two links and with description in the first link:
+          (setq res3  (cui-block-tags-replace  "11[[1::* headline][description]]4444[[1::* headline]]5555"))
+          ;; (print res3)))
           (should (string-equal target res3)))
         ;; (advice-remove 'org-open-file (intern "org-links-org-open-file-advice"))
 
