@@ -1249,6 +1249,57 @@ found."
         nil))))
 
 
+(defun cui-block-tags--collect-replacements (string)
+  "Return list of lists of ((BEG END LINK) ... ).
+Order of list from bottom to top.
+For replaceable org links in STRING."
+  (let ((matches '())
+        (start 0))
+    (while (string-match cui-block-tags--org-link-any-re string start)
+      (let ((b (match-beginning 0))
+            (e (match-end 0))
+            (s (match-string 0 string)))
+        (unless (or (cui-block-tags--markdown-block-string-p string b)
+                    (cui-block-tags--string-is-quoted-p string b))
+          ;; Extend e to swallow a trailing "][[…]]" description, if any.
+          (when (and (< e (length string))
+                     (string-match "\\]\\[\\[.*?\\]\\]" string e)
+                     (= (match-beginning 0) e))
+            (setq e (match-end 0)))
+          (push (list b e s) matches))
+        (setq start e)))
+    matches))
+
+(defun cui-block-tags--collect-replacements (string &optional regex)
+  "Return list of replacement records for STRING.
+
+Each record is (BEG END LINK).  Order of the returned list is
+bottom-to-top (descending BEG).
+
+REGEX, when non-nil, is used instead of
+`cui-block-tags--org-link-any-re' to scan STRING.  It must have the
+same shape: group 0 is the whole match, and the match begins at the
+position that should become BEG in the returned record."
+  (let ((matches '())
+        (start 0)
+        (re (or regex cui-block-tags--org-link-any-re)))
+    (while (string-match re string start)
+      (let ((b (match-beginning 0))
+            (e (match-end 0))
+            (s (match-string 0 string)))
+        (unless (or (cui-block-tags--markdown-block-string-p string b)
+                    (cui-block-tags--string-is-quoted-p string b))
+          ;; Swallow a trailing "][[...]]" description, if any.
+          (when (> (length string) e)
+            (when-let ((r (string-match "\\]\\[\\[.*?\\]\\]"
+                                        (substring string (1+ e)))))
+              (when (zerop r)
+                (setq e (+ (1+ e) (match-end 0))))))
+          (push (list b e s) matches))
+        (setq start e)))
+    matches))
+
+
 (defun cui-block-tags-replace (string &optional cui-block-markers)
   "Replace links in STRING with their targets.
 Check every type of links if it exist in text, find replacement for the
@@ -1285,33 +1336,22 @@ or vector if content have links to images."
             (setq string new-string)))))
 
 
-  ;; - Path @/path/file.txt - replace the last one only
-  (let ((matches '())
-        (start 0)
-        mbeg)
-    ;; Collect all matches and their positions
-    (while (string-match cui-block-tags--regexes-path string start)
-      (setq mbeg (1- (match-beginning 2))) ; add @
-      ;; check if not in ``` multiline markdown block
-      (unless (or (cui-block-tags--markdown-block-string-p string mbeg)
-                  (cui-block-tags--string-is-quoted-p string mbeg))
-        (push (cons (match-string 2 string) mbeg) matches))
-      (setq start (match-end 2)))
-
-    ;; Sort in reverse order so replacing substrings doesn't affect positions
-    (setq matches (sort matches (lambda (a b) (> (cdr a) (cdr b)))))
-
-    (dolist (match matches)
-      (let* ((tag-str (car match)) ; no @
-             (pos (cdr match))
-             (end (1+ (+ pos (length tag-str)))) ; and + @
-             (replacement (cui-block-tags--compose-block-for-path-full tag-str))
-             (replacement (concat replacement "\n")))
-        ;; Replace the substring in string
-        (setq string (concat
-                      (substring string 0 pos)
-                      replacement
-                      (substring string end))))))
+  ;; - Path @/path/file.txt
+  (dolist (m (cui-block-tags--collect-replacements string cui-block-tags--regexes-path) string)
+    (let* ((pos (nth 0 m))
+           (end (nth 1 m))
+           (tag (nth 2 m))
+           ;; tag includes the leading "@" because the regex matched
+           ;; it; strip it before composing the block.
+           ;; (tag (string-trim-left tag "[ \\t\\n\\r@]+"))
+           (tag (string-remove-prefix "@" (string-remove-prefix " " tag)))
+           (repl (concat
+                  " " ; regex match what space also, so we always add it, to have space before link
+                  (cui-block-tags--compose-block-for-path-full tag)
+                  "\n")))
+      (setq string (concat (substring string 0 pos)
+                           repl
+                           (substring string end)))))
 
   ;; - Org links [[link]] or file:/link
   ;; We search  for link regex,  when found we check  if there
@@ -1320,44 +1360,17 @@ or vector if content have links to images."
   ;; exist we replace it.
   ;; *Dont Wrap in markdown*
   (cui--debug "cui-block-tags-replace N2")
-  (let ((matches '()) ;; (beg_pos end_pos substring)
-        (start 0))
-    ;; Collect all matches up front
-    (cui--debug "cui-block-tags-replace N20 %s" string)
-    (while (string-match cui-block-tags--org-link-any-re string start)
-      ;; check if not in ``` multiline markdown block
-      (let ((b (match-beginning 0))
-            (e (match-end 0))
-            (s (match-string 0 string)))
-        (cui--debug "cui-block-tags-replace N21 %s %s" b e s)
-        (unless (or (cui-block-tags--markdown-block-string-p string b)
-                    (cui-block-tags--string-is-quoted-p string b))
-          ;; include description
-          ;; (cui--debug "cui-block-tags-replace N22 %s" e string (substring string e))
-          (when (> (length string) e)
-            (when-let ((r (string-match "\\]\\[\\[.*?\\]\\]" (substring string (1+ e)))))
-              (when (zerop r)
-                (cui--debug "cui-block-tags-replace N23 %s" r)
-                (setq e (+ (1+ e) (match-end 0))))))
-
-          (push (list b e s) matches))
-
-        (cui--debug "cui-block-tags-replace N4 %s %s %s" b e s)
-        (setq start e))) ; while
-    ;; Sort in reverse: safest for substring replacement
-    (setq matches (sort matches (lambda (a b) (> (car a) (car b)))))
-    (dolist (match matches)
-      (let* ((pos (car match))
-             (end (cadr match))
-             (link (caddr match)) ; shorter than pos-end
-             (replacement (cui-block-tags--get-replacement-for-org-link link cui-block-markers))
-             (replacement (concat replacement "\n")))
-        (cui--debug "cui-block-tags-replace N4 %s %s %s" link pos end)
-        ;; Replace in the string: pos - end
-        (setq string (concat
-                      (substring string 0 pos)
-                      replacement
-                      (substring string end))))))
+  ;; order from bottom to top
+  (dolist (m (cui-block-tags--collect-replacements string cui-block-tags--org-link-any-re) string)
+    (let* ((pos  (nth 0 m))
+           (end  (nth 1 m))
+           (link (nth 2 m))
+           (repl (concat (cui-block-tags--get-replacement-for-org-link
+                          link cui-block-markers)
+                         "\n")))
+      (setq string (concat (substring string 0 pos)
+                           repl
+                           (substring string end)))))
 
   (cui--debug "cui-block-tags-replace N5")
   string) ; return

@@ -607,6 +607,7 @@ Execution in not `org-mode' is supported.
 BEG and END is a range in which to search markdown.
 Careful, move pointer.
 Positions in list are begining of lines.
+Beginning of block is at ``` line, end is before ```.
 Return list of integers or nil."
   (goto-char beg)
   (let (regions markdown-beg)

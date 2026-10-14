@@ -579,8 +579,8 @@ run BODY with access to TEMP-DIR and TEMP-FILES, then clean up."
            (cui-block-tags--replace-first-match "f[^ ]* " "bar " "foo foo baz foo")
            "bar foo baz foo")))
 
-;; -=-= Test: cui-block-tags-replace
-(ert-deftest cui-tests-block-tags--replace ()
+;; -=-= Test: cui-block-tags-replace-test2
+(ert-deftest cui-tests-block-tags--replace-test2 ()
   (let* ((temp-dir (make-temp-file "my-tmp-dir-" t))     ;; Create temp directory
          (file1 (expand-file-name "file1.txt" temp-dir)) ;; Known file name
          (file2 (expand-file-name "file2.el" temp-dir))
@@ -596,7 +596,9 @@ run BODY with access to TEMP-DIR and TEMP-FILES, then clean up."
     ;; (string-join (string-split (cui-block-tags-replace (format "ssvv `@%s` bbb" file1)) "\n" ) "\\n"))
     ;; (cui-block-tags-replace (format "ssvv `@%s` bbb" file1)))
     (setq res (cui-block-tags-replace (format "ssvv @%s bbb" file1)))
+    ;; (pp res))
     (should (string-equal res "ssvv \nFile \"file1.txt\":\n```text\nContents for file1\n```\n bbb"))
+
     ;; ;; (print (cui-block-tags-replace (format "ssvv `@%s` bbb" file2))))
     ;; (string-join (string-split (cui-block-tags-replace (format "ssvv `@%s` bbb" file2)) "\n" ) "\\n"))
     ;; (cui-block-tags-replace (format "ssvv `@%s` bbb" file2)))
