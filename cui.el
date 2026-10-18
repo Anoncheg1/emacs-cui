@@ -531,7 +531,7 @@ ARG may be positive or nil."
     ;; else - not org mode
     (cui-block-previous-item arg)))
 
-;; -=-= Minor mode: keymap
+;; -=-= Keys - Minor mode: keymap
 ;;;###autoload
 (defvar-keymap cui-mode-map
   :repeat nil

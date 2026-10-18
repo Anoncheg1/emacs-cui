@@ -124,74 +124,6 @@ Should be added the last to be executed first."
            (substring line (min (length (string-trim-left line "")) min-indent)))
        lines "\n")))))
 
-;; -=-= Markdown: folding - healping funcs
-
-(defun cui-optional--markdown-heading-p ()
-  "Before first heading?
-like `org-before-first-heading-p'."
-  (save-excursion
-    (forward-line 0)
-    (and (looking-at cui-block--markdown-header-re)
-         (not (cui-block--markdown-block-p)))))
-
-(defun cui-optional--markdown-back-to-heading ()
-  "Go back to beginning of heading, return point or nil.
-Respect message prefixes, cui blocks and --- page separator.
-`org-back-to-heading-or-point-min'."
-  (or (when (cui-optional--markdown-heading-p)
-        (let ((lbp (line-beginning-position))) ; returns point
-          (goto-char lbp)))
-      (let* ((beg-of-message (cui-block--find-next-prev-region -1))
-             (page-sep (save-excursion
-                        (catch 'result
-                          (while (re-search-backward "^---" beg-of-message t)
-                            (when (save-excursion (not (cui-block--markdown-block-p)))
-                              (throw 'result (line-beginning-position))))
-                          nil)))
-             (min-lim-pos (max beg-of-message ; begin of prefix or block
-                               (or page-sep (point-min)))))
-        (re-search-backward cui-block--markdown-header-re min-lim-pos t))))
-
-(defun cui-optional--markdown-end-of-subtree ()
-  "Goto to the end of a visible subtree at point and return point.
-`org-end-of-subtree' uses `org-back-to-heading-or-point-min'.
-Cursors should be at header.
-Or set cursor at --- or at next chat prefix []: or at the end of chat
- block or end of buffer."
-  (when (cui-optional--markdown-back-to-heading)
-    (let* ((current-level (save-excursion
-                            (beginning-of-line)
-                            (if (looking-at cui-block--markdown-header-re)
-                                (length (match-string 1))
-                              1)))
-           (end-of-message (save-excursion
-                             (cui-block--find-next-prev-region))) ; or end of cui block
-           (page-sep (save-excursion
-                       (catch 'result
-                         (while (re-search-forward "^---" end-of-message t)
-                           (when (save-excursion (not (cui-block--markdown-block-p)))
-                             (forward-line)
-                             (throw 'result (line-beginning-position))))
-                         nil))) ; pointer or nil
-           (lim-pos (min end-of-message (or page-sep end-of-message (point-max))))) ; if not found, return nil
-
-      (end-of-line)
-      (cui--debug "cui-optional--markdown-end-of-subtree current-level=%s lim-pos=%s" current-level lim-pos)
-      (or (catch 'done
-            (while (re-search-forward (format "^\\(#\\{1,%d\\}\\) " current-level) lim-pos t)
-              (when (not (save-excursion
-                           (move-beginning-of-line 1)
-                           (cui-block--markdown-block-p)))
-                (throw 'done (let ((lbp (line-beginning-position))) ; returns point
-                               (goto-char lbp)))))
-            nil)
-
-        ;; else
-        (progn
-          (goto-char lim-pos)
-          (beginning-of-line)
-          (point))))))
-
 ;; -=-= Markdown: folding - cycling
 
 ;; 1. Tell Emacs that 'cui-markdown-invisible is an alias for the 'invisible property.
@@ -273,11 +205,11 @@ Return t if success."
   (cui--debug "cui-optional-markdown-cycle")
   (when (and (derived-mode-p 'org-mode)
              (cui-block-p)
-             (cui-optional--markdown-heading-p))
+             (cui-block--markdown-heading-p))
     (save-excursion
       (let ((eoh (line-end-position)) ; end of line
             (eos (save-excursion
-                   (cui-optional--markdown-end-of-subtree) ; set cursor at first header after end
+                   (cui-block--markdown-heading-end-of-subtree) ; set cursor at first header after end
                    (unless (eobp) (forward-char -1))
                    (point))))
         (if (= eoh eos) ; empty header
@@ -291,7 +223,7 @@ Return t if success."
                   (cui-optional--show-region-text-prop eoh eos)
                   ;; (org-fold-region eoh eos nil 'outline) ; show
                   (org-unlogged-message "SUBTREE"))
-              ;; else
+              ;; else - put a single hidding block, dont show subheaders
               (cui-optional--hide-region-text-prop eoh eos)
               ;; (org-fold-region eoh eos t 'outline) ; hide
               (org-unlogged-message "FOLDED"))))))))
@@ -316,7 +248,7 @@ Collapses text below the highest-level headline found in each field."
           (cui--debug "cui-optional-cycle-content-by-block-fields N2 %s" (point))
           (let ((beg (line-end-position))
                 ;; Use your helper function to instantly locate the boundary
-                (end (save-excursion (cui-optional--markdown-end-of-subtree))))
+                (end (save-excursion (cui-block--markdown-heading-end-of-subtree))))
 
                 (cui--debug "cui-optional-cycle-content-by-block-fields N3 %s" beg end)
 
