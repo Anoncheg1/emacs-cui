@@ -116,9 +116,19 @@ Arguments: type, role-text, pos, buffer
 - POS - position before text insertion
 - STREAM - stream mode or a single insertion.")
 
+(defcustom cui-block-before-send-hook nil
+  "For changing last message before sending, in buffer, before reading it.
+Run before request preparation before splitting cui block to chat messages.
+Accept two arguemnts - begin and end of message positions.
+- begin at begining of the line with message prefix
+- end at the end of the last line."
+  :type 'hook
+  :group 'cui)
+
 
 (defcustom cui-block-parse-part-hook nil
-  "Run before request preparation after splitting cui block to chat messages.
+  "For changing last message right before sending after reading it.
+Run before request preparation after splitting cui block to chat messages.
 Accept two arguemnts, return modified first argument.
 Hook should accept two parameters:
 - message content - raw string of after role prefix.
@@ -759,108 +769,6 @@ Respect message prefixes, cui blocks and --- page separator.
                                (or page-sep (point-min)))))
         (re-search-backward cui-block--markdown-header-re min-lim-pos t))))
 
-;; (defun cui-block--markdown-heading-end-of-subtree ()
-;;   "Goto to the end of a visible subtree at point and return point.
-;; `org-end-of-subtree' uses `org-back-to-heading-or-point-min'.
-;; Cursors should be at header.
-;; Or set cursor at --- or at next chat prefix []: or at the end of chat
-;;  block or end of buffer."
-;;   (when (cui-block--markdown-heading-back-to)
-;;     (let* ((current-level (save-excursion
-;;                             (beginning-of-line)
-;;                             (if (looking-at cui-block--markdown-header-re)
-;;                                 (length (match-string 1))
-;;                               1))) ; number
-;;            (end-of-message (save-excursion
-;;                              (cui-block--find-next-prev-region))) ; point at next [me] or end of cui block
-;;            (page-sep (save-excursion
-;;                        (catch 'result
-;;                          (while (re-search-forward "^---" end-of-message t)
-;;                            (when (save-excursion (not (cui-block--markdown-block-p)))
-;;                              (forward-line)
-;;                              (throw 'result (line-beginning-position))))
-;;                          nil))) ; pointer or nil
-;;            (lim-pos (min end-of-message (or page-sep end-of-message (point-max))))) ; if not found, return nil
-
-;;       (end-of-line)
-;;       (cui--debug "cui-block--markdown-heading-end-of-subtree current-level=%s lim-pos=%s" current-level lim-pos)
-;;       (or (catch 'done
-;;             (while (re-search-forward (format "^\\(#\\{1,%d\\}\\) " current-level) lim-pos t)
-;;               (when (not (save-excursion
-;;                            (move-beginning-of-line 1)
-;;                            (cui-block--markdown-block-p)))
-;;                 (throw 'done (let ((lbp (line-beginning-position))) ; returns point
-;;                                (goto-char lbp)))))
-;;             nil)
-
-;;         ;; else
-;;         (progn
-;;           (goto-char lim-pos)
-;;           (beginning-of-line)
-;;           (point))))))
-
-
-;; (defun cui-block--markdown-heading-end-of-subtree (&optional reverse)
-;;   "Goto to the end of a visible subtree at point and return point.
-;; If REVERSE is non-nil, goto to the beginning of the subtree instead.
-;; `org-end-of-subtree' uses `org-back-to-heading-or-point-min'.
-;; Cursors should be at header.
-;; Or set cursor at --- or at next chat prefix []: or at the end of chat
-;;  block or end of buffer."
-;;   (when (cui-block--markdown-heading-back-to)
-;;     (let* ((current-level (save-excursion
-;;                             (beginning-of-line)
-;;                             (if (looking-at cui-block--markdown-header-re)
-;;                                 (length (match-string 1))
-;;                               1)))
-;;            (start-of-subtree (save-excursion
-;;                                (beginning-of-line)
-;;                                (point)))
-;;            (end-of-message (save-excursion
-;;                              (cui-block--find-next-prev-region)))
-;;            (page-sep (save-excursion
-;;                        (let (result)
-;;                          (while (and (not result)
-;;                                      (re-search-forward "^---" end-of-message t))
-;;                            (when (save-excursion (not (cui-block--markdown-block-p)))
-;;                              (forward-line)
-;;                              (setq result (line-beginning-position))))
-;;                          result)))
-;;            (lim-pos (min end-of-message (or page-sep end-of-message (point-max))))
-;;            (re (format "^\\(#\\{1,%d\\}\\) " current-level))
-;;            found)
-
-;;       (end-of-line)
-;;       (cui--debug "cui-block--markdown-heading-end-of-subtree reverse=%s current-level=%s lim-pos=%s"
-;;                   reverse current-level lim-pos)
-
-;;       (if reverse
-;;           ;; ---- to beginning of subtree ----
-;;           (progn
-;;             (while (and (not found)
-;;                         (re-search-backward re start-of-subtree t))
-;;               (when (not (save-excursion
-;;                            (move-beginning-of-line 1)
-;;                            (cui-block--markdown-block-p)))
-;;                 (setq found (line-beginning-position))))
-;;             (if found
-;;                 (progn (goto-char found) (point))
-;;               (goto-char start-of-subtree)
-;;               (point)))
-
-;;         ;; ---- to end ----
-;;         (while (and (not found)
-;;                     (re-search-forward re lim-pos t))
-;;           (when (not (save-excursion
-;;                        (move-beginning-of-line 1)
-;;                        (cui-block--markdown-block-p)))
-;;             (setq found (line-beginning-position))))
-;;         (if found
-;;             (progn (goto-char found) (point))
-;;           (goto-char lim-pos)
-;;           (beginning-of-line)
-;;           (point))))))
-
 (defun cui-block--markdown-heading-end-of-subtree (&optional reverse)
   "Goto to the end of a visible subtree at point and return point.
 If REVERSE is non-nil, goto to the beginning of the subtree instead.
@@ -876,9 +784,10 @@ Cursors should be at header."
            (end-of-message (save-excursion (cui-block--find-next-prev-region)))
            (page-sep (save-excursion
                        (when (re-search-forward "^---" end-of-message t)
-                         (unless (cui-block--markdown-block-p)
+                         (unless (save-excursion (cui-block--markdown-block-p))
                            (forward-line)
-                           (line-beginning-position)))))
+                           (line-beginning-position)
+                           ))))
            (lim (min end-of-message (or page-sep end-of-message (point-max))))
            (re (format "^\\(#\\{1,%d\\}\\) " current-level))
            (not-block-p (lambda ()
@@ -1286,34 +1195,7 @@ steps."
                    (cui-block--markdown-heading-end-of-subtree)
                  ;; else
                  (cui-block--markdown-heading-end-of-subtree t))
-               (setq arg (+ arg step))
-               )
-             ;; (catch 'done
-             ;;   (while (/= arg 0) ; LOOP by search
-             ;;     ;; 1) position point so the next search starts past
-             ;;     ;;    the current line in the correct direction
-             ;;     (if forward (end-of-line) (beginning-of-line))
-             ;;     ;; 2) find the next candidate header
-             ;;     (unless (funcall search-fn
-             ;;                      cui-block--markdown-header-re bound t)
-             ;;       (throw 'done nil))
-             ;;     ;; 3) inspect the *line* of the match, not post-match point
-             ;;     (if (save-excursion
-             ;;           (move-beginning-of-line 1)
-             ;;           (cui-block--markdown-block-p))
-             ;;         ;; rejected: skip it and continue the loop
-             ;;         (progn
-             ;;           ;; guarantee forward progress for backward search
-             ;;           (unless forward
-             ;;             (when (> (point) beg)
-             ;;               (goto-char (1- (point))))))
-             ;;       ;; accepted: one item consumed
-             ;;       (setq arg (+ arg step))
-             ;;       (setq moved t)))
-             ;;   (when moved
-             ;;     (beginning-of-line)
-             ;;     t))
-             )))
+               (setq arg (+ arg step))))))
 
      ;; 2. Markdown Block Beg/End Clause
      ((save-excursion

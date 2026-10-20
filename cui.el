@@ -164,6 +164,8 @@
 ;; - make org-to-markdown as a separage file.
 ;; - Implement  Agent Client Protocol (ACP) and Websocket
 ;; - Ability to use several SYS prompts and store it separately.
+;; - optional folding of headers should show subheaders, not first level only
+;; - add replaction of - to – (em-dash) and - to en-dash between range.
 ;;; Code:
 
 ;; Touch: Pain, water and warm.
