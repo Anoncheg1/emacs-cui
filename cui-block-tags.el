@@ -1249,27 +1249,6 @@ found."
         nil))))
 
 
-(defun cui-block-tags--collect-replacements (string)
-  "Return list of lists of ((BEG END LINK) ... ).
-Order of list from bottom to top.
-For replaceable org links in STRING."
-  (let ((matches '())
-        (start 0))
-    (while (string-match cui-block-tags--org-link-any-re string start)
-      (let ((b (match-beginning 0))
-            (e (match-end 0))
-            (s (match-string 0 string)))
-        (unless (or (cui-block-tags--markdown-block-string-p string b)
-                    (cui-block-tags--string-is-quoted-p string b))
-          ;; Extend e to swallow a trailing "][[…]]" description, if any.
-          (when (and (< e (length string))
-                     (string-match "\\]\\[\\[.*?\\]\\]" string e)
-                     (= (match-beginning 0) e))
-            (setq e (match-end 0)))
-          (push (list b e s) matches))
-        (setq start e)))
-    matches))
-
 (defun cui-block-tags--collect-replacements (string &optional regex)
   "Return list of replacement records for STRING.
 

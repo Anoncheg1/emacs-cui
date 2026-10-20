@@ -1263,13 +1263,13 @@ Return number of marked content."
                           (block-size (when reg (- (car reg) (cdr reg))))) ; may be nil
                      (deactivate-mark)
                      (goto-char pos)
-                     (ignore-errors                    ;; wrong-type-argument number-or-marker-p nil) at begining of the buffer.
+                     ;; (ignore-errors                    ;; wrong-type-argument number-or-marker-p nil) at begining of the buffer.
                        (message "Org Element")
                        (org-mark-element)
                        (if (and block-size (> (- (region-end) (region-beginning)) block-size))
                            nil
                          ;; else
-                         (list (region-beginning) (region-end))))))
+                         (list (region-beginning) (region-end)))))
                  ;; Step 1: Markdown block
                  (lambda ()
                    (message "MBlock content")
