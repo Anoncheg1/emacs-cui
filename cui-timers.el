@@ -248,12 +248,13 @@ Called from
 If Optional argument FAILED is non-nil, then explicitly notify user
 about failure."
   (cui--debug "cui-timers--interrupt-all-requests N1 %s %s" cui-timers--element-marker-variable-dict failed)
-  (when-let ((buffers (cui-timers--get-all-keys)))
-    (cui--debug "cui-timers--interrupt-all-requests N2 %s" buffers)
-    ;; stop requests
-    (mapc (lambda (url-buffer)
-            (funcall interrupt-request-func url-buffer))
-          buffers))
+  (let ((buffers (cui-timers--get-all-keys)))
+    (when buffers
+      (cui--debug "cui-timers--interrupt-all-requests N2 %s" buffers)
+      ;; stop requests
+      (mapc (lambda (url-buffer)
+              (funcall interrupt-request-func url-buffer))
+            buffers)))
   (cui--debug "cui-timers--interrupt-all-requests n3")
   ;; clear list
   (setq cui-timers--element-marker-variable-dict nil)

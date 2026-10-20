@@ -453,23 +453,24 @@ Start and first line after header, end at of line of the first not empty
 Same as `org-src--contents-area', but without content.
 Optional argument ELEMENT should be cui block if specified.
 Return nil or cons."
-  (when-let ((element (or element (cui-block-p))))
-    (let ((beg (org-element-property :contents-begin element))
-          (end (org-element-property :contents-end element)))
-      (cui--debug "cui-block--contents-region %s" beg end)
-      (save-excursion
-        (if (and beg end)
-            (progn
-              (goto-char end)
-              ;; skip empty lines
-              (while (and (bolp) (>= (point) beg))
-                (backward-char))
-              (forward-char)
-              (cons beg (point)))
-          ;; else - empty block
-          (org-with-wide-buffer
-           (goto-char (org-element-property :begin element))
-           (cons (line-beginning-position 2) (line-beginning-position 2))))))))
+  (let ((element (or element (cui-block-p))))
+    (when element
+      (let ((beg (org-element-property :contents-begin element))
+            (end (org-element-property :contents-end element)))
+        (cui--debug "cui-block--contents-region %s" beg end)
+        (save-excursion
+          (if (and beg end)
+              (progn
+                (goto-char end)
+                ;; skip empty lines
+                (while (and (bolp) (>= (point) beg))
+                  (backward-char))
+                (forward-char)
+                (cons beg (point)))
+            ;; else - empty block
+            (org-with-wide-buffer
+             (goto-char (org-element-property :begin element))
+             (cons (line-beginning-position 2) (line-beginning-position 2)))))))))
 
 
 (defun cui-block--region (&optional element)
@@ -478,16 +479,17 @@ Execution in not `org-mode' is supported.
 In not `org-mode' return whole buffer min max position.
 Start at header begining of line, end at footer end of line.
 Optional argument ELEMENT is cui block."
-  (if-let ((element (or element (when (derived-mode-p 'org-mode)
-                                    (cui-block-p)))))
-    (cons (org-element-property :begin element)
-	  (save-excursion
-            (goto-char (org-element-property :end element))
-	    (skip-chars-backward " \r\t\n")
-            (point)))
-    ;; else
-    (when (not (derived-mode-p 'org-mode))
-      (cons (point-min) (point-max)))))
+  (let ((element (or element (when (derived-mode-p 'org-mode)
+                               (cui-block-p)))))
+    (if element
+        (cons (org-element-property :begin element)
+	      (save-excursion
+                (goto-char (org-element-property :end element))
+	        (skip-chars-backward " \r\t\n")
+                (point)))
+      ;; else
+      (when (not (derived-mode-p 'org-mode))
+        (cons (point-min) (point-max))))))
 
 ;; -=-= get-content: fn
 
@@ -507,27 +509,28 @@ Return string without properties or nil.
 Optional argument NOT-CLEAR-PROPERTIES, prevent cleaning of properties,
  we add properties to highlight expanded noweb references for
  previewing."
-  (when-let ((reg (cui-block--contents-region element)))
-    (let ((con-beg (car reg))
-          (con-end (cdr reg)))
-      (cui--debug "cui-block-get-content %s %s" con-beg con-end)
-      (org-with-wide-buffer
-       (let* ((unexpanded-content (if (or (not con-beg) (not con-end))
-                                      (error "Empty block")
-                                    ;; else
-                                    (string-trim (buffer-substring-no-properties con-beg con-end))))
-              (noweb-control (or noweb-control
-                                 (org-babel-noweb-p (cui-block-get-info element)
-                                                    (or noweb-context :eval))
-                                 (org-entry-get (point) "cui-noweb" t)))
-              (content (if noweb-control
-                           ;; pass info
-                           (if not-clear-properties
-                               (cui-block--apply-noweb unexpanded-content)
-                             ;; else
-                             (org-babel-expand-noweb-references (list "markdown" unexpanded-content))) ; main
-                         unexpanded-content)))
-         (string-trim content))))))
+  (let ((reg (cui-block--contents-region element)))
+    (when reg
+      (let ((con-beg (car reg))
+            (con-end (cdr reg)))
+        (cui--debug "cui-block-get-content %s %s" con-beg con-end)
+        (org-with-wide-buffer
+         (let* ((unexpanded-content (if (or (not con-beg) (not con-end))
+                                        (error "Empty block")
+                                      ;; else
+                                      (string-trim (buffer-substring-no-properties con-beg con-end))))
+                (noweb-control (or noweb-control
+                                   (org-babel-noweb-p (cui-block-get-info element)
+                                                      (or noweb-context :eval))
+                                   (org-entry-get (point) "cui-noweb" t)))
+                (content (if noweb-control
+                             ;; pass info
+                             (if not-clear-properties
+                                 (cui-block--apply-noweb unexpanded-content)
+                               ;; else
+                               (org-babel-expand-noweb-references (list "markdown" unexpanded-content))) ; main
+                           unexpanded-content)))
+           (string-trim content)))))))
 
 ;; -=-= help function to call hooks as pipeline with one argument
 (defun cui-block--pipeline (funcs init-val &rest args)
@@ -786,8 +789,7 @@ Cursors should be at header."
                        (when (re-search-forward "^---" end-of-message t)
                          (unless (save-excursion (cui-block--markdown-block-p))
                            (forward-line)
-                           (line-beginning-position)
-                           ))))
+                           (line-beginning-position)))))
            (lim (min end-of-message (or page-sep end-of-message (point-max))))
            (re (format "^\\(#\\{1,%d\\}\\) " current-level))
            (not-block-p (lambda ()
@@ -1245,92 +1247,91 @@ Return number of marked content."
         found-beg found-end
         step)
     (save-mark-and-excursion
-      (when-let ((block-region (cui-block--region)))
-        (let* ((block-beg (car block-region))
-               (block-end (cdr block-region))
-               ;; (mark-markdown
-               ;;  (lambda ()
-               ;;    (message "MBlock")
-               ;;    (let ((res (cui-block--markdown-area (point) block-beg block-end)))
-               ;;      (cons (car res) (cdr res))))) ; beg-cont end-cont
-               (steps
-                (list
-                 ;; Step 0: Org element
-                 (lambda ()
-                   ;; Additionally check if point is in markdown block
-                   ;; that element is less than block.
-                   (let* ((reg (cui-block--markdown-block-p))
-                          (block-size (when reg (- (car reg) (cdr reg))))) ; may be nil
-                     (deactivate-mark)
-                     (goto-char pos)
-                     ;; (ignore-errors                    ;; wrong-type-argument number-or-marker-p nil) at begining of the buffer.
-                       (message "Org Element")
-                       (org-mark-element)
-                       (if (and block-size (> (- (region-end) (region-beginning)) block-size))
-                           nil
-                         ;; else
-                         (list (region-beginning) (region-end)))))
-                 ;; Step 1: Markdown block
-                 (lambda ()
-                   (message "MBlock content")
-                   (when-let* ((rng1 (cui-block--markdown-block-p block-beg block-end))
-                               (rng2 (cui-block--markdown-block-content-range (car rng1) (cdr rng1))))
-                     ;; (print (list rng1 (car rng1) (cdr rng1) rng2))
-                     (list (car rng2) (cdr rng2))))
+      (when-let* ((block-region (cui-block--region))
+                  (block-beg (car block-region))
+                  (block-end (cdr block-region))
+                  ;; (mark-markdown
+                  ;;  (lambda ()
+                  ;;    (message "MBlock")
+                  ;;    (let ((res (cui-block--markdown-area (point) block-beg block-end)))
+                  ;;      (cons (car res) (cdr res))))) ; beg-cont end-cont
+                  (steps
+                   (list
+                    ;; Step 0: Org element
+                    (lambda ()
+                      ;; Additionally check if point is in markdown block
+                      ;; that element is less than block.
+                      (let* ((reg (cui-block--markdown-block-p))
+                             (block-size (when reg (- (car reg) (cdr reg))))) ; may be nil
+                        (deactivate-mark)
+                        (goto-char pos)
+                        ;; (ignore-errors                    ;; wrong-type-argument number-or-marker-p nil) at begining of the buffer.
+                        (message "Org Element")
+                        (org-mark-element)
+                        (if (and block-size (> (- (region-end) (region-beginning)) block-size))
+                            nil
+                          ;; else
+                          (list (region-beginning) (region-end)))))
+                    ;; Step 1: Markdown block
+                    (lambda ()
+                      (message "MBlock content")
+                      (when-let* ((rng1 (cui-block--markdown-block-p block-beg block-end))
+                                  (rng2 (cui-block--markdown-block-content-range (car rng1) (cdr rng1))))
+                        ;; (print (list rng1 (car rng1) (cdr rng1) rng2))
+                        (list (car rng2) (cdr rng2))))
 
-                 ;; Step 2: Markdown block with header and footer
-                 (lambda ()
-                   (message "MBlock with header")
-                   (when-let ((rng (cui-block--markdown-block-p block-beg block-end)))
-                     (list (car rng) (progn (goto-char (cdr rng)) (line-end-position)))))
-                 ;; Step 3: Chat message
-                 (lambda ()
-                   (message "Chat message")
-                   (cui-block-mark-chat-message-at-point)
-                   (list (region-beginning) (region-end)))
-                 ;; Step 4: Block content
-                 (lambda ()
-                   (message "Block content")
-                   (let ((reg (cui-block--contents-region)))
-                     (when reg
-                       (list (car reg) (cdr reg)))))
-                 ;; Step 5: Block whole
-                 (lambda () (message "Block whole") (list block-beg block-end)))))
+                    ;; Step 2: Markdown block with header and footer
+                    (lambda ()
+                      (message "MBlock with header")
+                      (let ((rng (cui-block--markdown-block-p block-beg block-end)))
+                        (when rng
+                          (list (car rng) (progn (goto-char (cdr rng)) (line-end-position))))))
+                    ;; Step 3: Chat message
+                    (lambda ()
+                      (message "Chat message")
+                      (cui-block-mark-chat-message-at-point)
+                      (list (region-beginning) (region-end)))
+                    ;; Step 4: Block content
+                    (lambda ()
+                      (message "Block content")
+                      (let ((reg (cui-block--contents-region)))
+                        (when reg
+                          (list (car reg) (cdr reg)))))
+                    ;; Step 5: Block whole
+                    (lambda () (message "Block whole") (list block-beg block-end)))))
 
-          ;; Step sequentially
-          (when (region-active-p) (setq inx 1)) ; skip org element if region active.
-          (while (and (< inx 6)
-                      (not expanded))
-            (setq step (nth inx steps))
-            (setq inx (1+ inx))
+        ;; Step sequentially
+        (when (region-active-p) (setq inx 1)) ; skip org element if region active.
+        (while (and (< inx 6)
+                    (not expanded))
+          (setq step (nth inx steps))
+          (setq inx (1+ inx))
 
-            (deactivate-mark)
-            (goto-char pos)
-            (when-let* ((reg (funcall step))
-                        (beg (car reg))
-                        (end (cadr reg))
-                        (new-size (- end beg)))
-              (when (<= new-size cur-size)
-                (setq prev-inx (1- inx)))
-              ;; Compare new region size
-              (cui--debug "cui-block-mark-at-point %s %s %s %s" inx reg (when beg (- end beg)) cur-size)
-              (when (and beg end
-                         (> new-size cur-size)
-                         (> new-size (1+ cur-size))) ; and more than one character (it is new line between MBlock and chat message
-                (goto-char beg)
-                (set-mark end)
+          (deactivate-mark)
+          (goto-char pos)
+          (when-let* ((reg (funcall step))
+                      (beg (car reg))
+                      (end (cadr reg))
+                      (new-size (- end beg)))
+            (when (<= new-size cur-size)
+              (setq prev-inx (1- inx)))
+            ;; Compare new region size
+            (cui--debug "cui-block-mark-at-point %s %s %s %s" inx reg (when beg (- end beg)) cur-size)
+            (when (and beg end
+                       (> new-size cur-size)
+                       (> new-size (1+ cur-size))) ; and more than one character (it is new line between MBlock and chat message
+              (goto-char beg)
+              (set-mark end)
 
-                (setq expanded t
-                      cur-size (- end beg)
-                      found-beg beg
-                      found-end end)))))))
+              (setq expanded t
+                    cur-size (- end beg)
+                    found-beg beg
+                    found-end end))))))
     ;; If nothing expanded, just mark whole block
     (when expanded
       (deactivate-mark)
       (goto-char found-beg)
-      (set-mark found-end)
-      ;; (activate-mark)
-      )
+      (set-mark found-end))
     (list prev-inx inx)))
 
 (defun cui-block-mark-at-point (&optional arg)
@@ -1380,40 +1381,41 @@ If universal argument ARG is non-nil, mark content of cui block."
 Uses marker for original position.
 Removes next word after PARAMETER if it doesn't start with ':'.
 If VALUE is provided and NOT-JUMP-BACK is nil, restores cursor."
-  (if-let ((element (or (cui-block-p)
-                        (org-element-lineage
-                         (save-match-data (org-element-context)) (list 'src-block) t))))
-      (let ((param-str (if (symbolp parameter) (symbol-name parameter) parameter))
-            (orig-marker (copy-marker (point)))
-            ;; Force case-insensitive.
-            (case-fold-search t))
-        (goto-char (org-element-property :begin element)) ; (goto-char (car (cui-block--region)))
-        ;; (goto-char (car (cui-block--region)))
-        ;; Find parameter or insert it if missing
-        (if (search-forward param-str (line-end-position) t)
-            ;; Remove next word if not starts with ":"
-            (let ((p (point)))
-              (skip-chars-forward " \t")
-              (let ((wn (thing-at-point 'word)))
-                (unless (string-prefix-p ":" wn)
-                  (delete-region p (+ p (1+ (length wn)))))
-                (goto-char p)))
+  (let ((element (or (cui-block-p)
+                     (org-element-lineage
+                      (save-match-data (org-element-context)) (list 'src-block) t))))
+    (if element
+        (let ((param-str (if (symbolp parameter) (symbol-name parameter) parameter))
+              (orig-marker (copy-marker (point)))
+              ;; Force case-insensitive.
+              (case-fold-search t))
+          (goto-char (org-element-property :begin element)) ; (goto-char (car (cui-block--region)))
+          ;; (goto-char (car (cui-block--region)))
+          ;; Find parameter or insert it if missing
+          (if (search-forward param-str (line-end-position) t)
+              ;; Remove next word if not starts with ":"
+              (let ((p (point)))
+                (skip-chars-forward " \t")
+                (let ((wn (thing-at-point 'word)))
+                  (unless (string-prefix-p ":" wn)
+                    (delete-region p (+ p (1+ (length wn)))))
+                  (goto-char p)))
             ;; else - not found
-          (re-search-forward "_\\(src\\|ai\\)\\s-*\\(\\w+\\)?" (line-end-position) t)
-          (insert " " param-str))
+            (re-search-forward "_\\(src\\|ai\\)\\s-*\\(\\w+\\)?" (line-end-position) t)
+            (insert " " param-str))
 
-        ;; Insert value if provided
-        (if value
-            (progn
-              (insert (format " %s" value))
-              (backward-word))
-          ;; else
-          (insert " "))
-        ;; Jump back if needed
-        (when (and value (not not-jump-back))
-          (goto-char orig-marker)))
-    ;; else
-    (message "Not cui block here.")))
+          ;; Insert value if provided
+          (if value
+              (progn
+                (insert (format " %s" value))
+                (backward-word))
+            ;; else
+            (insert " "))
+          ;; Jump back if needed
+          (when (and value (not not-jump-back))
+            (goto-char orig-marker)))
+      ;; else
+      (message "Not cui block here."))))
 
 ;; -=-= fn: find named block (Not used)
 (defun cui-find-named-block (name)

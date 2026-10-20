@@ -233,35 +233,36 @@ Return t if success."
   "Process fields within the block region separated by '^---'.
 Collapses text below the highest-level headline found in each field."
   (interactive)
-  (when-let ((block-region (cui-block--region)))
-    (let ((block-beg (car block-region))
-          (block-end (cdr block-region)))
+  (let ((block-region (cui-block--region)))
+    (when block-region
+      (let ((block-beg (car block-region))
+            (block-end (cdr block-region)))
 
-      ;; 1. Reveal everything first
-      (cui--debug "cui-optional-cycle-content-by-block-fields N1 %s" block-beg block-end)
-      (cui-optional--show-region-text-prop block-beg block-end)
+        ;; 1. Reveal everything first
+        (cui--debug "cui-optional-cycle-content-by-block-fields N1 %s" block-beg block-end)
+        (cui-optional--show-region-text-prop block-beg block-end)
 
-      (save-excursion
-        (goto-char block-beg)
-        ;; 2. Direct forward scan through the entire block
-        (while (re-search-forward "^\\(#+\\) " block-end t)
-          (cui--debug "cui-optional-cycle-content-by-block-fields N2 %s" (point))
-          (let ((beg (line-end-position))
-                ;; Use your helper function to instantly locate the boundary
-                (end (save-excursion (cui-block--markdown-heading-end-of-subtree))))
+        (save-excursion
+          (goto-char block-beg)
+          ;; 2. Direct forward scan through the entire block
+          (while (re-search-forward "^\\(#+\\) " block-end t)
+            (cui--debug "cui-optional-cycle-content-by-block-fields N2 %s" (point))
+            (let ((beg (line-end-position))
+                  ;; Use your helper function to instantly locate the boundary
+                  (end (save-excursion (cui-block--markdown-heading-end-of-subtree))))
 
-                (cui--debug "cui-optional-cycle-content-by-block-fields N3 %s" beg end)
+              (cui--debug "cui-optional-cycle-content-by-block-fields N3 %s" beg end)
 
-                ;; 3. Hide the found region if valid
-                (when (and end (> end beg))
-                  (cui--debug "cui-optional-cycle-content-by-block-fields N31")
-                  (cui-optional--hide-region-text-prop beg (1- end))
+              ;; 3. Hide the found region if valid
+              (when (and end (> end beg))
+                (cui--debug "cui-optional-cycle-content-by-block-fields N31")
+                (cui-optional--hide-region-text-prop beg (1- end))
 
-                  ;; 4. Move point to the end of the subtree to skip over hidden text
-                  ;; and continue searching for the next field's headlines.
+                ;; 4. Move point to the end of the subtree to skip over hidden text
+                ;; and continue searching for the next field's headlines.
 
-                  (cui--debug "cui-optional-cycle-content-by-block-fields N32")
-                  (goto-char end))))))))
+                (cui--debug "cui-optional-cycle-content-by-block-fields N32")
+                (goto-char end)))))))))
 
 
 (defun cui-optional-cycle-block ()
@@ -277,21 +278,22 @@ Safely isolates processing using `save-excursion' and `narrow-to-region'
 to preserve original buffer point and narrowing state."
   (interactive)
   (cui--debug "cui-optional-cycle-global N0 %s" (cui-block--region))
-  (when-let ((block-region (cui-block--region)))
-    (let ((block-beg (car block-region))
-          (block-end (cdr block-region)))
-      (save-excursion
-        ;; (save-restriction
-        ;;   (widen)
-        ;;   ;; Narrow Emacs' view so string/search functions only see this block
-        ;;   (narrow-to-region block-beg block-end)
+  (let ((block-region (cui-block--region)))
+    (when block-region
+      (let ((block-beg (car block-region))
+            (block-end (cdr block-region)))
+        (save-excursion
+          ;; (save-restriction
+          ;;   (widen)
+          ;;   ;; Narrow Emacs' view so string/search functions only see this block
+          ;;   (narrow-to-region block-beg block-end)
           (cui--debug "cui-optional-cycle-global N1 %s" block-beg block-end)
           (if (cui-optional--region-has-hidden-subregions-p block-beg block-end)
               (progn
                 (cui--debug "cui-optional-cycle-global has hidden %s %s" block-beg block-end)
                 (cui-optional--show-region-text-prop block-beg block-end)) ; show
             (cui--debug "cui-optional-cycle-global")
-            (cui-optional-cycle-content-by-block-fields))))))       ; Hide
+            (cui-optional-cycle-content-by-block-fields)))))))       ; Hide
 
 
 (defun cui-optional-markdown-folding-shifttab-advice (orig-fun &rest args)
@@ -302,11 +304,12 @@ TODO: May cause error at `org-element--parse-to' at `re-search-forward'."
   (if (and (bound-and-true-p cui-mode)
            ;; if there is markdown headers in cui block
            (save-excursion
-             (when-let ((block-region (cui-block--region)))
-               (let ((block-beg (car block-region))
-                     (block-end (cdr block-region)))
-                 (goto-char block-beg)
-                 (re-search-forward cui-block--markdown-header-re block-end t)))))
+             (let ((block-region (cui-block--region)))
+               (when block-region
+                 (let ((block-beg (car block-region))
+                       (block-end (cdr block-region)))
+                   (goto-char block-beg)
+                   (re-search-forward cui-block--markdown-header-re block-end t))))))
 
       (progn (cui--debug "cui-optional-markdown-folding-shifttab-advice N2")
       (cui-optional-cycle-block))

@@ -558,35 +558,35 @@ once.
                                                                            (cui-restapi--get-single-response-text result)
                                                                            t))))))
     ;; - Call and save buffer.
-    (when-let ((url-buffer (cui-restapi--url-request service model callback
-                                                     :prompt (when (eql req-type 'completion) content) ; if completion - string
-                                                     :messages (when (not (eql req-type 'completion)) content) ; chat - vector
-                                                     :max-tokens max-tokens
-                                                     :temperature temperature
-                                                     :top-p top-p
-                                                     :frequency-penalty frequency-penalty
-                                                     :presence-penalty presence-penalty
-                                                     :stream stream)))
+    (let ((url-buffer (cui-restapi--url-request service model callback
+                                                :prompt (when (eql req-type 'completion) content) ; if completion - string
+                                                :messages (when (not (eql req-type 'completion)) content) ; chat - vector
+                                                :max-tokens max-tokens
+                                                :temperature temperature
+                                                :top-p top-p
+                                                :frequency-penalty frequency-penalty
+                                                :presence-penalty presence-penalty
+                                                :stream stream)))
+      (when url-buffer
+        (cui-timers--set url-buffer (cui-block-get-header-marker element))
 
-      (cui-timers--set url-buffer (cui-block-get-header-marker element))
+        ;; - run timer that show /-\ looping, notification of status
+        (cui--debug "cui-restapi-request-prepare N2")
+        (cui-timers--progress-reporter-run
+         #'cui-restapi--interrupt-url-request)
 
-      ;; - run timer that show /-\ looping, notification of status
-      (cui--debug "cui-restapi-request-prepare N2")
-      (cui-timers--progress-reporter-run
-       #'cui-restapi--interrupt-url-request)
+        ;; socket check - cause two messages: this and "Connection socket was closed by unknown reason"
+        (sleep-for 0.3)
+        (when (and url-buffer (buffer-live-p url-buffer) (cui-timers--get-variable url-buffer))
+          (let ((proc (get-buffer-process url-buffer)))
+            ;; If the process failed immediately or isn't running, force-invoke callback
+            (when (and proc (memq (process-status proc) '(exit closed failed)))
 
-      ;; socket check - cause two messages: this and "Connection socket was closed by unknown reason"
-      (sleep-for 0.3)
-      (when (and url-buffer (buffer-live-p url-buffer) (cui-timers--get-variable url-buffer))
-        (let ((proc (get-buffer-process url-buffer)))
-          ;; If the process failed immediately or isn't running, force-invoke callback
-          (when (and proc (memq (process-status proc) '(exit closed failed)))
-
-            ;; Position at cui block still
-            (funcall cui-restapi-show-error-function (format "Connection failed or port was closed for %s" (cui-restapi--get-endpoint (not (eql req-type 'completion)) service))
-                     (cui-block-get-header-marker)) ; use current buffer to insert result
-            ;; (setq url-buffer nil)
-            (cui-timers--interrupt-current-request url-buffer #'cui-restapi--stop-tracking-url-request)))))))
+              ;; Position at cui block still
+              (funcall cui-restapi-show-error-function (format "Connection failed or port was closed for %s" (cui-restapi--get-endpoint (not (eql req-type 'completion)) service))
+                       (cui-block-get-header-marker)) ; use current buffer to insert result
+              ;; (setq url-buffer nil)
+              (cui-timers--interrupt-current-request url-buffer #'cui-restapi--stop-tracking-url-request))))))))
 
 ;; -=-= Normalize, cui-restapi--url-request
 
@@ -608,17 +608,18 @@ Error should be handled before calling this function in
 Return text of message."
   (when response
     (cui--debug "cui-restapi--get-single-response-text response:" response)
-    (if-let ((err-obj (plist-get response 'error)))
-        (let ((mes (or (plist-get err-obj 'message)
-                           err-obj)))
+    (let ((err-obj (plist-get response 'error)))
+      (if err-obj
+          (let ((mes (or (plist-get err-obj 'message)
+                         err-obj)))
             (error mes))
-      ;; else - no "error" field
-      (if-let* ((choice (aref (plist-get response 'choices) 0))
-                (text (or (plist-get choice 'text)
-                          ;; Together.xyz, Github
-                          (plist-get (plist-get choice 'message) 'content))))
-          ;; - Decode text
-          (decode-coding-string text 'utf-8)))))
+        ;; else - no "error" field
+        (if-let* ((choice (aref (plist-get response 'choices) 0))
+                  (text (or (plist-get choice 'text)
+                            ;; Together.xyz, Github
+                            (plist-get (plist-get choice 'message) 'content))))
+            ;; - Decode text
+            (decode-coding-string text 'utf-8))))))
 
 
 
@@ -654,94 +655,97 @@ RESPONSE is plist is one JSON message of the stream response as a chunk of full
 response.
 Return list or responses, with every response as `cui-block--response'."
   ;; (cui--debug "response:" response)
-  (if-let ((error-message (plist-get response 'error)))
-      (list (make-cui-block--response :type 'error :payload (or (plist-get response 'message) error-message)))
+  (let ((error-message (plist-get response 'error)))
+    (if error-message
+        (list (make-cui-block--response :type 'error :payload (or (plist-get response 'message) error-message)))
+      ;;else
+      (let ((response-type (plist-get response 'type)))
 
-    (let ((response-type (plist-get response 'type)))
+        ;; first try anthropic
+        (cond
+         ((string= response-type "ping") nil)
+         ((string= response-type "message_start")
+          (let ((role (plist-get (plist-get response 'message) 'role)))
+            (when role
+              (list (make-cui-block--response :type 'role :payload role)))))
+         ((string= response-type "content_block_start")
+          (when-let* ((text (plist-get (plist-get response 'content_block) 'text))
+                      (text (when text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8))))
+            (list (make-cui-block--response :type 'text :payload text))))
+         ((string= response-type "content_block_delta")
+          (when-let* ((text (plist-get (plist-get response 'delta) 'text))
+                      (text (when text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8))))
+            (list (make-cui-block--response :type 'text :payload text))))
+         ((string= response-type "content_block_stop") nil)
+         ((string= response-type "message_delta")
+          (when-let* ((stop-reason (plist-get (plist-get response 'delta) 'stop_reason))
+                      (stop-reason (when stop-reason (decode-coding-string (encode-coding-string stop-reason 'utf-8 't) 'utf-8))))
+            (list (make-cui-block--response :type 'stop :payload stop-reason))))
+         ((string= response-type "message_stop") nil)
 
-      ;; first try anthropic
-      (cond
-       ((string= response-type "ping") nil)
-       ((string= response-type "message_start")
-        (when-let ((role (plist-get (plist-get response 'message) 'role)))
-          (list (make-cui-block--response :type 'role :payload role))))
-       ((string= response-type "content_block_start")
-        (when-let* ((text (plist-get (plist-get response 'content_block) 'text))
-                    (text (when text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8))))
-          (list (make-cui-block--response :type 'text :payload text))))
-       ((string= response-type "content_block_delta")
-        (when-let* ((text (plist-get (plist-get response 'delta) 'text))
-                    (text (when text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8))))
-          (list (make-cui-block--response :type 'text :payload text))))
-       ((string= response-type "content_block_stop") nil)
-       ((string= response-type "message_delta")
-        (when-let* ((stop-reason (plist-get (plist-get response 'delta) 'stop_reason))
-                    (stop-reason (when stop-reason (decode-coding-string (encode-coding-string stop-reason 'utf-8 't) 'utf-8))))
-          (list (make-cui-block--response :type 'stop :payload stop-reason))))
-       ((string= response-type "message_stop") nil)
 
+         ;; try perplexity.ai
+         ((and (plist-get response 'model) (string-prefix-p "llama-" (plist-get response 'model)))
+          (let ((choices (plist-get response 'choices)))
+            (when (and choices (> (length choices) 0))
+              (let* ((choice (aref choices 0))
+                     (mes (plist-get choice 'message))
+                     (delta (plist-get choice 'delta))
+                     (role (or (plist-get delta 'role) (plist-get mes 'role)))
+                     (text (or (plist-get delta 'content) (plist-get mes 'content)))
+                     (finish-reason (plist-get choice 'finish_reason)))
+                (append
+                 (when role
+                   (list (make-cui-block--response :type 'role :payload role)))
+                 (when text
+                   (setq text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8))
+                   (list (make-cui-block--response :type 'text :payload text)))
+                 (when finish-reason
+                   (list (make-cui-block--response :type 'stop :payload finish-reason))))))))
 
-       ;; try perplexity.ai
-       ((and (plist-get response 'model) (string-prefix-p "llama-" (plist-get response 'model)))
-        (let ((choices (plist-get response 'choices)))
-          (when (and choices (> (length choices) 0))
-            (let* ((choice (aref choices 0))
-                   (mes (plist-get choice 'message))
-                   (delta (plist-get choice 'delta))
-                   (role (or (plist-get delta 'role) (plist-get mes 'role)))
-                   (text (or (plist-get delta 'content) (plist-get mes 'content)))
-                   (finish-reason (plist-get choice 'finish_reason)))
-              (append
-               (when role
-                 (list (make-cui-block--response :type 'role :payload role)))
-               (when text
-                 (setq text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8))
-                 (list (make-cui-block--response :type 'text :payload text)))
-               (when finish-reason
-                 (list (make-cui-block--response :type 'stop :payload finish-reason))))))))
+         ;; single message e.g. from non-streamed completion. Repeat `cui-restapi--get-single-response-text'
+         ((let ((choices (plist-get response 'choices)))
+            (and (= 1 (length choices))
+                 (plist-get (aref choices 0) 'message)))
+          (let* ((choices (plist-get response 'choices))
+                 (choice (aref choices 0))
+                 (text (plist-get (plist-get choice 'message) 'content))
+                 (text (when text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8)))
+                 (role (plist-get (plist-get choice 'message) 'role))
+                 (finish-reason (or (plist-get choice 'finish_reason) 'stop)))
+            (list (make-cui-block--response :type 'role :payload role)
+                  (make-cui-block--response :type 'text :payload text)
+                  (make-cui-block--response :type 'stop :payload finish-reason))))
 
-       ;; single message e.g. from non-streamed completion. Repeat `cui-restapi--get-single-response-text'
-       ((let ((choices (plist-get response 'choices)))
-          (and (= 1 (length choices))
-               (plist-get (aref choices 0) 'message)))
-        (let* ((choices (plist-get response 'choices))
-               (choice (aref choices 0))
-               (text (plist-get (plist-get choice 'message) 'content))
-               (text (when text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8)))
-               (role (plist-get (plist-get choice 'message) 'role))
-               (finish-reason (or (plist-get choice 'finish_reason) 'stop)))
-          (list (make-cui-block--response :type 'role :payload role)
-                (make-cui-block--response :type 'text :payload text)
-                (make-cui-block--response :type 'stop :payload finish-reason))))
-
-       ;; try openai, deepseek, gemini streamed
-       (t (let ((choices (plist-get response 'choices)))
-            (cl-loop for choice across choices
-                     append (let* ((delta (plist-get choice 'delta))
-                                   (role (when-let ((role (plist-get delta 'role)))
-                                           (if (and (string= "assistant" role)
-                                                    (plist-get delta 'reasoning_content))
-                                               "assistant_reason"
-                                             role)))
-                                   (text (plist-get (plist-get choice 'delta) 'content))
-                                   (text (when text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8)))
-                                   (reasoning-text (plist-get delta 'reasoning_content))
-                                   (reasoning-text (when reasoning-text (decode-coding-string (encode-coding-string reasoning-text 'utf-8 't) 'utf-8)))
-                                   (finish-reason (plist-get choice 'finish_reason))
-                                   (result nil))
-                              (when finish-reason
-                                (push (make-cui-block--response :type 'stop :payload finish-reason) result))
-                              (when (and reasoning-text (> (length reasoning-text) 0))
-                                ;; (setq cui-restapi--currently-reasoning t)
-                                (push (make-cui-block--response :type 'text :payload reasoning-text) result))
-                              (when (and text (> (length text) 0))
-                                (push (make-cui-block--response :type 'text :payload text) result))
+         ;; try openai, deepseek, gemini streamed
+         (t (let ((choices (plist-get response 'choices)))
+              (cl-loop for choice across choices
+                       append (let* ((delta (plist-get choice 'delta))
+                                     (role (let ((role (plist-get delta 'role)))
+                                             (when role
+                                               (if (and (string= "assistant" role)
+                                                        (plist-get delta 'reasoning_content))
+                                                   "assistant_reason"
+                                                 role))))
+                                     (text (plist-get (plist-get choice 'delta) 'content))
+                                     (text (when text (decode-coding-string (encode-coding-string text 'utf-8 't) 'utf-8)))
+                                     (reasoning-text (plist-get delta 'reasoning_content))
+                                     (reasoning-text (when reasoning-text (decode-coding-string (encode-coding-string reasoning-text 'utf-8 't) 'utf-8)))
+                                     (finish-reason (plist-get choice 'finish_reason))
+                                     (result nil))
+                                (when finish-reason
+                                  (push (make-cui-block--response :type 'stop :payload finish-reason) result))
+                                (when (and reasoning-text (> (length reasoning-text) 0))
+                                  ;; (setq cui-restapi--currently-reasoning t)
+                                  (push (make-cui-block--response :type 'text :payload reasoning-text) result))
+                                (when (and text (> (length text) 0))
+                                  (push (make-cui-block--response :type 'text :payload text) result))
                                 ;; (when cui-restapi--currently-reasoning
                                 ;;   (setq cui-restapi--currently-reasoning nil)
                                 ;;   (push (make-cui-block--response :type 'role :payload "assistant") result)))
-                              (when role
-                                (push (make-cui-block--response :type 'role :payload role) result))
-                              result))))))))
+                                (when role
+                                  (push (make-cui-block--response :type 'role :payload role) result))
+                                result)))))))))
 
 ;; cui-restapi-request
 (cl-defun cui-restapi--url-request (service model callback &optional &key prompt messages max-tokens temperature top-p frequency-penalty presence-penalty stream)
