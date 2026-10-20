@@ -401,8 +401,9 @@ Return string or nil or raise user-error."
   (cond
    ;; audo or image?
    ((unless content
-      (when-let (res (cui-block-tags--detect-multimodal-pair path-string))
-        (format "@%s-%s:%s" (car res) (cdr res) path-string)))) ; image or audio
+      (let ((res (cui-block-tags--detect-multimodal-pair path-string)))
+        (when res
+          (format "@%s-%s:%s" (car res) (cdr res) path-string))))) ; image or audio
    ;; is binary?
    ((and (not (file-directory-p path-string))
          (not content)
@@ -682,19 +683,20 @@ Optional argiments:
 Return full content of block or nil."
   ;; 1) enshure that we are inside some Org block
   (cui--debug "cui-block-tags--get-content-org-block-at-point %s" inner cui-block-markers)
-  (when-let ((element (or element (cui-block-tags--block-at-point))))
-    ;; (cui--debug "cui-block-tags--get-content-org-block-at-point3 %s" tags-control)
-    (cui-block-tags--compose-m-block
-     ;; content
-     (cui-block-tags-get-content element nil nil nil cui-block-markers) ; may cause recursion
-     :lang (if (eq (org-element-type element) 'src-block)
-               (org-element-property :language element)
-             ;; else
-             (when (cui-block-p element)
-               "ai"))
-     :header (when-let ((name (org-element-property :name element))) ; nil or string
-               (concat "Block name: " name))
-     :inner inner)))
+  (let ((element (or element (cui-block-tags--block-at-point))))
+    (when element
+      ;; (cui--debug "cui-block-tags--get-content-org-block-at-point3 %s" tags-control)
+      (cui-block-tags--compose-m-block
+       ;; content
+       (cui-block-tags-get-content element nil nil nil cui-block-markers) ; may cause recursion
+       :lang (if (eq (org-element-type element) 'src-block)
+                 (org-element-property :language element)
+               ;; else
+               (when (cui-block-p element)
+                 "ai"))
+       :header (let ((name (org-element-property :name element))) ; nil or string
+                 (when name (concat "Block name: " name)))
+       :inner inner))))
 
 ;; [[file:~/sources/emacs-cui/cui-block-tags.el::735::((and (member type cui-block-tags-org-blocks-types)]]
 
@@ -989,31 +991,34 @@ Optional CUI-BLOCK-MARKERS argument used to prevent loop.
 Return string or nil."
   ;; (require 'org-links)
   (cui--debug "cui-block-tags--get-org-links-content N1 %s " link)
-  (if-let ((nums (org-links--local-get-target-position-for-link link))) ; may be nil
-      (let ((num1 (car nums))
-            (num2 (cadr nums))) ; may be nil
-        (cui--debug "cui-block-tags--get-org-links-content N2 %s %s" num1 num2)
-        ;; 1) Case1: num1 and num2 - get range
-        (if num2
-            (if-let ((pos1 (cui-block-tags--line-num-to-positon num1))
-                     (pos2 (or (cui-block-tags--line-num-to-positon num2 'end-of-line) (point-max))))
-                (progn
-                  (cui--debug "cui-block-tags--get-org-links-content N3 %s %s" pos1 pos2)
-                  (cui-block-tags--compose-m-block (buffer-substring-no-properties pos1 pos2)
-                                                   :lang (cui-block-tags--filepath-to-language (or (and (derived-mode-p 'fundamental-mode)
-                                                                                                        buffer-file-name)
-                                                                                                   major-mode))))
-              ;; pos1 is nil
-              (user-error "In link %s of NUM-NUM format was not possible to find first NUM in buffer %s" link (current-buffer)))
-          ;; else - 1) Case1: only num1, num2 is nil - get object at num1 or just line.
-          (if-let ((pos1 (cui-block-tags--line-num-to-positon num1)))
-              (save-excursion
-                (cui--debug "cui-block-tags--get-org-links-content N4 %s" pos1)
-                (goto-char pos1)
-                (cui-block-tags--get-content-at-point cui-block-markers))
-            (user-error "In link %s of NUM format was not possible to find first position in buffer %s" link (current-buffer)))))
-    ;; else - not org-links type link.
-    nil))
+  (let ((nums (org-links--local-get-target-position-for-link link))) ; may be nil
+    (if nums
+        (let ((num1 (car nums))
+              (num2 (cadr nums))) ; may be nil
+          (cui--debug "cui-block-tags--get-org-links-content N2 %s %s" num1 num2)
+          ;; 1) Case1: num1 and num2 - get range
+          (if num2
+              (let ((pos1 (cui-block-tags--line-num-to-positon num1))
+                    (pos2 (or (cui-block-tags--line-num-to-positon num2 'end-of-line) (point-max))))
+                (if (and pos1 pos2)
+                    (progn
+                      (cui--debug "cui-block-tags--get-org-links-content N3 %s %s" pos1 pos2)
+                      (cui-block-tags--compose-m-block (buffer-substring-no-properties pos1 pos2)
+                                                       :lang (cui-block-tags--filepath-to-language (or (and (derived-mode-p 'fundamental-mode)
+                                                                                                            buffer-file-name)
+                                                                                                       major-mode))))
+                  ;; pos1 is nil
+                  (user-error "In link %s of NUM-NUM format was not possible to find first NUM in buffer %s" link (current-buffer))))
+            ;; else - 1) Case1: only num1, num2 is nil - get object at num1 or just line.
+            (let ((pos1 (cui-block-tags--line-num-to-positon num1)))
+              (if pos1
+                  (save-excursion
+                    (cui--debug "cui-block-tags--get-org-links-content N4 %s" pos1)
+                    (goto-char pos1)
+                    (cui-block-tags--get-content-at-point cui-block-markers))
+                (user-error "In link %s of NUM format was not possible to find first position in buffer %s" link (current-buffer))))))
+      ;; else - not org-links type link.
+      nil)))
 
 ;; (cui-block-tags--get-org-links-content "9-10")
 
@@ -1120,11 +1125,12 @@ Return replacement string or nil."
                     (not (string-empty-p option)))
                ;; PATH and OPTION
                (if (cui-block-tags--path-is-current-buffer-p path)
-                   (if-let ((num (cui-block-tags--string-is-integer option)))
-                       ;; case 2) PATH::NUM
-                       (progn (org-goto-line num) (cui-block-tags--get-content-at-point cui-block-markers))
-                     ;; else case 3) *recursion call*! without path
-                     (cui-block-tags--get-replacement-for-org-link  (org-link-make-string option) cui-block-markers)) ; recursive call
+                   (let ((num (cui-block-tags--string-is-integer option)))
+                     (if num
+                         ;; case 2) PATH::NUM
+                         (progn (org-goto-line num) (cui-block-tags--get-content-at-point cui-block-markers))
+                       ;; else case 3) *recursion call*! without path
+                       (cui-block-tags--get-replacement-for-org-link  (org-link-make-string option) cui-block-markers))) ; recursive call
                  ;; - else case 4) <other-file> - *recursive call*!
                  (cui-block-tags--get-replacement-for-org-file-link-in-other-file path option))
              ;; else case 1) - no ::, only path
@@ -1270,9 +1276,9 @@ position that should become BEG in the returned record."
                     (cui-block-tags--string-is-quoted-p string b))
           ;; Swallow a trailing "][[...]]" description, if any.
           (when (> (length string) e)
-            (when-let ((r (string-match "\\]\\[\\[.*?\\]\\]"
+            (let ((r (string-match "\\]\\[\\[.*?\\]\\]"
                                         (substring string (1+ e)))))
-              (when (zerop r)
+              (when (and r (zerop r))
                 (setq e (+ (1+ e) (match-end 0))))))
           (push (list b e s) matches))
         (setq start e)))
