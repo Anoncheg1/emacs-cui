@@ -467,7 +467,7 @@ Start and first line after header, end at of line of the first not empty
 
 ;; -=-= functions: get-content, get-content-ai-messages
 ;; sys-prompt-for-all-messages
-(defun cui-block-tags-get-content-ai-messages (&optional element noweb-control links-only-last not-clear-properties cui-block-markers disable-tags req-type sys-prompt max-tokens-string)
+(defun cui-block-tags-get-content-ai-messages (&optional element noweb-control links-only-last not-clear-properties cui-block-markers disable-tags req-type sys-prompt)
   "Get content of cui block with expansion of links and cleaning.
 Execution in not `org-mode' is supported.
 Same to `cui-restapi-prepare-content'
@@ -476,8 +476,8 @@ Expand links and tags only for :eval context, for :tangle, dont expand.
 If ELEMENT not specified, :begin of current element is used, in not Org
  mode `point-min' is used.
 Optional arguments ELEMENT LINKS-ONLY-LAST
- NOT-CLEAR-PROPERTIES REQ-TYPE SYS-PROMPT
- MAX-TOKENS documented at `cui-block-tags-get-content'.
+ NOT-CLEAR-PROPERTIES REQ-TYPE SYS-PROMPT documented at
+`cui-block-tags-get-content'.
 If DISABLE-TAGS boolen flag is non-nil, links will not be expanded, it
  is like inverse NOWEB-CONTROL.
 Optional argument CUI-BLOCK-MARKERS is a list of header markers created
@@ -507,8 +507,6 @@ Return vector with messages for cui block, or string if REQ-TYPE is
         (let* (;; 1) get messages as vector from content
                (messages (cui-block-msgs--collect-chat-messages-at-point element
                                                                    sys-prompt
-                                                                   ;; sys-prompt-for-all-messages
-                                                                   max-tokens-string
                                                                    t)) ; not-merge - user may use links and organize message by self.
                (_ (cui--debug "cui-block-tags-get-content-ai-messages N2_1" messages))
                ;; 2) noweb expansion
@@ -563,7 +561,7 @@ Return vector with messages for cui block, or string if REQ-TYPE is
 ;; with `cui-block-markers' before calling
 ;; `cui-block-tags-get-content' `cui-block-tags-replace'.
 ;; old: sys-prompt-for-all-messages
-(defun cui-block-tags-get-content (&optional element noweb-control links-only-last not-clear-properties cui-block-markers disable-tags req-type sys-prompt max-tokens-string)
+(defun cui-block-tags-get-content-main (&optional element noweb-control links-only-last not-clear-properties cui-block-markers disable-tags req-type sys-prompt)
   "Get content of supported blocks in current position in current buffer.
 With properly expansion of tags, links and noweb references.
 For evaluation, tangling, or exporting.
@@ -599,7 +597,7 @@ Return string with expanded content."
      ((string-equal "ai" (org-element-property :type element))
       (string-trim
        (cui-block-msgs--stringify-chat-messages
-        (cui-block-tags-get-content-ai-messages element noweb-control links-only-last not-clear-properties cui-block-markers disable-tags req-type sys-prompt max-tokens-string))))
+        (cui-block-tags-get-content-ai-messages element noweb-control links-only-last not-clear-properties cui-block-markers disable-tags req-type sys-prompt))))
 
      ((eq (org-element-type element) 'src-block)
       (goto-char (org-element-property :begin element))
@@ -688,7 +686,7 @@ Return full content of block or nil."
       ;; (cui--debug "cui-block-tags--get-content-org-block-at-point3 %s" tags-control)
       (cui-block-tags--compose-m-block
        ;; content
-       (cui-block-tags-get-content element nil nil nil cui-block-markers) ; may cause recursion
+       (cui-block-tags-get-content-main element nil nil nil cui-block-markers) ; may cause recursion
        :lang (if (eq (org-element-type element) 'src-block)
                  (org-element-property :language element)
                ;; else

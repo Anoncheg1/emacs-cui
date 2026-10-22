@@ -289,7 +289,7 @@ There are ~cui-block-roles-prefixes~ variable that allow to customize roles at s
 For incoming RestAPI conversion to prefixes ~cui-block-roles-restapi~ variable used.
 
 ** Elisp: Get content of block
-: (cui-block-tags-get-content)
+: (cui-block-tags-get-content-main)
 Or
 #+begin_src elisp :lexical t :results none :exports code :eval no
 (cui-block-tags--clear-properties

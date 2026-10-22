@@ -167,7 +167,7 @@ Return list of plist with :content and :role."
     (nreverse (remove nil res))))
 
 ;; persistant-sys-prompts
-(defun cui-block-msgs--prepare-chat-messages (parts &optional default-system-prompt max-token-recommendation not-merge separator)
+(defun cui-block-msgs--prepare-chat-messages (parts &optional default-system-prompt not-merge separator)
   "Prepare a list of chat messages.
 
 PARTS is a list of plists, each with :role and :content keys
@@ -175,8 +175,6 @@ PARTS is a list of plists, each with :role and :content keys
 
 - If DEFAULT-SYSTEM-PROMPT is provided and the first message is not a
  system prompt, it is inserted at the beginning.
-- MAX-TOKEN-RECOMMENDATION is appended to the first system message's
- content.
 - If NOT-MERGE is nil, adjacent messages with the same role are merged
  using SEPARATOR (defaults to \\n).
 
@@ -184,44 +182,20 @@ Returns a new list of message plists with :role and :content.
 Note: This function modifies the contents of the message plists in
  PARTS."
   (cui--debug "cui-block-msgs--prepare-chat-messages N1" parts)
-  (cui--debug "cui-block-msgs--prepare-chat-messages N2 %s" default-system-prompt max-token-recommendation not-merge separator)
+  (cui--debug "cui-block-msgs--prepare-chat-messages N2 %s" default-system-prompt not-merge separator)
   (let* ((parts (if not-merge parts
                   ;; else
                   (cui-block-msgs--merge-by-role parts (or separator "\n")))) ; Merge messages with same role.
          (starts-with-sys-prompt-p (and parts (eql (plist-get (car parts) :role) 'system))))
 
-      ;; (cui--debug "cui-block--collect-chat-messages N3" parts)
-
       ;; 1) Parts: fix [SYS:]
       (when (and default-system-prompt (not starts-with-sys-prompt-p))
         (setq parts (cons (list :role 'system :content default-system-prompt) parts)))
 
-      ;; 2) max-token - add string to content or add system message
-      (when max-token-recommendation
-        (if (or starts-with-sys-prompt-p default-system-prompt)
-            (setf (plist-get (car parts) :content)
-                  (concat
-                   (plist-get (car parts) :content) " " max-token-recommendation))
-          ;; else - add system
-          (setq parts (cons (list :role 'system :content max-token-recommendation) parts))))
-
-      ;; 3) add persistant-sys-prompts as a prefix to every 'user message
-      ;; (when persistant-sys-prompts
-      ;;   (let ((lst parts)
-      ;;         cur)
-      ;;     (while lst
-      ;;       (setq cur (car lst))
-      ;;       (when (eql (plist-get cur :role) 'user)
-      ;;         ;; modify content or parts
-      ;;         (setf (plist-get cur :content)
-      ;;               (concat
-      ;;                persistant-sys-prompts " "
-      ;;                (plist-get cur :content))))
-      ;;       (setq lst (cdr lst)))))
       parts))
 
 ;; persistant-sys-prompts
-(defun cui-block-msgs--collect-chat-messages-at-point (&optional element default-system-prompt max-token-recommendation not-merge first-chat-role separator)
+(defun cui-block-msgs--collect-chat-messages-at-point (&optional element default-system-prompt not-merge first-chat-role separator)
   "Collect messages for cui block at current positon.
 Execution in not `org-mode' is supported.
 Used for main cui block call.  Should not be used for sub-calls.
@@ -234,7 +208,7 @@ Description for SEPARATOR at
 Optional argument FIRST-CHAT-ROLE may be used to change default \='user
  for the first message that may don't have chat prefix.
 When NOT-MERGE is not-nil, don't merge messages after reading.
-Description for DEFAULT-SYSTEM-PROMPT MAX-TOKEN-RECOMMENDATION SEPARATOR
+Description for DEFAULT-SYSTEM-PROMPT SEPARATOR
  at `cui-block-msgs--prepare-chat-messages'.
 Return vector of plist messages with :role and :content."
   (cui--debug "cui-block-msgs--collect-chat-messages-at-point N1 %s" element)
@@ -247,10 +221,11 @@ Return vector of plist messages with :role and :content."
                          ;; else
                          (point-max))))
     ;; (cui--debug "cui-block-msgs--collect-chat-messages-at-point N2 %s" element)
+    ;; 1) get PARTS from block
     (let ((parts (cui-block-msgs--collect-chat-messages-from-buffer
                   content-start content-end first-chat-role))) ; list, preserve properties
       ;; (cui--debug "cui-block-msgs--collect-chat-messages-at-point N3" parts)
-      ;; - Apply hook for every message, modify parts
+      ;; - 2) Apply hook for every message, modify parts
       (mapc (lambda (cur)
               ;; (cui--debug "cui-block-msgs--collect-chat-messages-at-point N4 %s" cur)
               (let* ((content (plist-get cur :content))
@@ -261,9 +236,9 @@ Return vector of plist messages with :role and :content."
                 ;; (setf (plist-get cur :content) new-content)
                 (plist-put cur :content new-content)))
             parts)
-      ;; - first step of preparation
+      ;; - 3) first step of preparation
       ;; (cui--debug "cui-block-msgs--collect-chat-messages-at-point N6" parts)
-      (setq parts (cui-block-msgs--prepare-chat-messages parts default-system-prompt max-token-recommendation not-merge separator))
+      (setq parts (cui-block-msgs--prepare-chat-messages parts default-system-prompt not-merge separator))
       (cui--debug "cui-block-msgs--collect-chat-messages-at-point N7" parts)
       (apply #'vector parts))))
 

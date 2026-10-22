@@ -1035,7 +1035,7 @@ ss
                            (cui-block-p)))
            ;; (info (progn (goto-char (org-element-property :begin element)) (cui-block-get-info)))
            )
-      (should-error (cui-block-tags-get-content-ai-messages element t nil nil nil nil nil 'chat "sys1" "3") :type 'error))))
+      (should-error (cui-block-tags-get-content-ai-messages element t nil nil nil nil nil 'chat "sys1") :type 'error))))
       ;; (should-error (cui-block-tags-get-content-ai-messages nil element 'chat "sys1" "sys-all2" 3) :type 'error))))
 
 (ert-deftest cui-tests-block-tags--get-content-ai-messages2 ()
@@ -1044,7 +1044,7 @@ ss
     (let* ((element (progn (insert "#+begin_ai :stream t :sys \"A helpful LLM.\" :stream2 :max-tokens 50 :max-tokens2 :model \"gpt-3.5-turbo\" :model1 :model2 t :model3 :temperature 0.7\nss\n#+end_ai\n")
                            (goto-char 1)
                            (cui-block-p)))
-           (res (cui-block-tags-get-content-ai-messages element t nil nil nil nil 'chat "sys1" "3")))
+           (res (cui-block-tags-get-content-ai-messages element t nil nil nil nil 'chat "sys1")))
       (should (eq (length res) 2))
       (should (string-match "sys1" (plist-get (aref res 0) :content)))
       (should (eql 'system (plist-get (aref res 0) :role)))
@@ -1058,7 +1058,7 @@ ss
     (let* ((element (progn (insert "#+begin_ai :stream t :sys \"A helpful LLM.\" :stream2 :max-tokens 50 :max-tokens2 :model \"gpt-3.5-turbo\" :model1 :model2 t :model3 :temperature 0.7\nss\n[AI:]vv\n[ME:]tt\n#+end_ai\n")
                            (goto-char 1)
                            (cui-block-p)))
-           (res (cui-block-tags-get-content-ai-messages element t nil nil nil nil 'chat "sys1" "3")))
+           (res (cui-block-tags-get-content-ai-messages element t nil nil nil nil 'chat "sys1")))
       (should (eq (length res) 4))
       (should (eql 'system (plist-get (aref res 0) :role)))
       (should (eql 'user (plist-get (aref res 1) :role)))
@@ -1125,7 +1125,7 @@ ss
           (insert "blas\n")
           (insert "[[aal]]")
           (setq res
-                (cui-block-tags-get-content))
+                (cui-block-tags-get-content-main))
           (should (string-equal res
                                 "[ME]: blas
 test
@@ -1148,9 +1148,9 @@ test
            (res (cui-block-tags-get-content-ai-messages
                  element
                  nil nil nil nil nil ; noweb-control links-only-last not-clear-properties cui-block-markers disable-tags
-                 'chat "sys1" "3")))
+                 'chat "sys1")))
       ;; res))
-      (should (equal res '[(:role system :content "sys1 3")
+      (should (equal res '[(:role system :content "sys1")
                            (:role user :content "sshh2")
                            (:role assistant :content "vvhh2")
                            (:role user :content "tthh2")])))))

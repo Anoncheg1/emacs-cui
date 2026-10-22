@@ -122,7 +122,7 @@ Arguments
                                                              nil ; not-clear-properties
                                                              nil ; cui-block-markers
                                                              nil ; disable-tags
-                                                             'chat)))
+                                                             'chat))) ; req-type
          (messages (cui-prompt-collect-chat-research-steps-prompt cui-prompt-chain-list
                                                                   step
                                                                   messages

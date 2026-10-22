@@ -104,28 +104,6 @@ Used by `cui-block--insert-stream-response' in sensitive to case way."
 ;; (cdr (assoc-string "assistant" cui-block-roles-restapi)) ; => assistant
 ;; (car (rassoc ' cui-block-roles-restapi)) ; => "+me"
 
-(defvar cui-block-after-chat-insertion-hook nil
-  "Hook that is called when a chat response is inserted.
-Note this is called for every stream response so it will typically only
-contain fragments.
-For STREAM executed for every word and one time with TYPE=\'end.
-For non-STREAM executed one time with TYPE=\'end.
-Arguments: type, role-text, pos, buffer
-- TYPE - simbol \='role, \='text or'end,
-- ROLE-TEXT - text or role name,
-- POS - position before text insertion
-- STREAM - stream mode or a single insertion.")
-
-(defcustom cui-block-before-send-hook nil
-  "For changing last message before sending, in buffer, before reading it.
-Run before request preparation before splitting cui block to chat messages.
-Accept two arguemnts - begin and end of message positions.
-- begin at begining of the line with message prefix
-- end at the end of the last line."
-  :type 'hook
-  :group 'cui)
-
-
 (defcustom cui-block-parse-part-hook nil
   "For changing last message right before sending after reading it.
 Run before request preparation after splitting cui block to chat messages.
@@ -138,6 +116,18 @@ Executed from left to right and pass it result value as content
  arguments string to next."
   :type 'hook
   :group 'cui)
+
+(defvar cui-block-after-chat-insertion-hook nil
+  "Hook that is called after reseived chat response was inserted.
+For stream response it is called after every fragments.
+For STREAM executed for every word and one time with TYPE=\'end.
+For non-STREAM executed one time with TYPE=\'end.
+Arguments: type, role-text, pos, buffer
+- TYPE - simbol \='role, \='text or'end,
+- ROLE-TEXT - text or role name,
+- POS - position before text insertion
+- STREAM - stream mode or a single insertion.")
+
 
 (defcustom cui-block-jump-to-end-of-block t
   "If non-nil, jump to the end of the block after inserting response."
@@ -496,7 +486,7 @@ Optional argument ELEMENT is cui block."
 (defun cui-block-get-content (&optional element noweb-control noweb-context not-clear-properties)
   "Extracts the text content of the #+begin_cui...#+end_cui block.
 Don't support tags and Org links expansion, for that use
- `cui-block-tags-get-content' instead.
+ `cui-block-tags-get-content-main' instead.
 ELEMENT is the element of the cui block, use only in current moment, if
  buffer modified you will need new ELEMENT.
 If NOWEB-CONTROL boolean is non-nil, activate no noweb references.

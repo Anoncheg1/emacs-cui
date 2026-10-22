@@ -206,6 +206,16 @@ If you specify :chain at block parameters line, associated function will
                 :tag "Property list (symbol => funcion)")
   :group 'cui)
 
+(defcustom cui-before-send-hook nil
+  "For changing last message before sending, in buffer, before reading it.
+Run before request preparation before splitting cui block to chat messages.
+Accept two arguemnts - begin positions of the last message.
+- begin at begining of the line with message prefix
+- end at the end of the last line of message."
+  :type 'hook
+  :group 'cui)
+
+
 ;; -=-= C-c C-c main interface
 (defun cui-ctrl-c-ctrl-c ()
   "Remove result and parse cui block header parameters."
@@ -288,7 +298,6 @@ Return list values from cui block header or ORG properties set by looking
       (list element noweb-control sys-prompt model max-tokens top-p temperature frequency-penalty presence-penalty service stream ; model params
             info))))
 
-;; cui-prepare-messages
 (defun cui-prepare-messages (req-type element noweb-control sys-prompt max-tokens)
   "Read content of cui block and prepare it to request.
 REQ-TYPE is a symbol as a key without : from `cui-req-type-functions'.
@@ -299,6 +308,14 @@ SYS-PROMPT is :sys keyword of cui block that will be placed as the first
  system message in chat.
 MAX-TOKENS is integer limit for LLM output.
 Return string or vector."
+  ;; hook
+  (let* ((positions (cui-block--get-chat-messages-positions (org-element-property :contents-begin element)
+                                                           (org-element-property :contents-end element)
+                                                           cui-block--chat-prefixes-re))
+        (last-beg (car (last positions 2)))
+        (last-end (1- (car (last positions)))))
+    (run-hook-with-args 'cui-before-send-hook last-beg last-end))
+  ;; main
   (if (eql req-type 'completion) ; old
       (cui-block-tags-replace (string-trim (cui-block-get-content element))) ; return string
     ;; else - chat - vector
@@ -309,10 +326,11 @@ Return string or vector."
      nil ; not-clear-properties
      nil ; cui-block-markers
      nil ; disable-tags
-     req-type sys-prompt
-     ;; max-tokens-string
-     (when (and max-tokens cui-restapi-add-max-tokens-recommendation)
-       (cui-restapi--get-length-recommendation max-tokens)))))
+     req-type
+     (if (and max-tokens cui-restapi-add-max-tokens-recommendation)
+       (concat sys-prompt " "(cui-restapi--get-length-recommendation max-tokens))
+       ;; else
+       sys-prompt))))
 
 ;; -=-= interactive fn: key M-x: cui-expand-block
 (defun cui-expand-block-deep ()
@@ -321,9 +339,11 @@ Return list of strings to print."
   ;; `cui-parse-org-header'
   (seq-let (element noweb-control sys-prompt model max-tokens top-p temperature frequency-penalty presence-penalty service stream info) (cui-parse-org-header)
     (let* ((req-type (cui-block--get-request-type info))
-           (max-tokens-string (when (and max-tokens
-                                         cui-restapi-add-max-tokens-recommendation)
-                                (cui-restapi--get-length-recommendation max-tokens)))
+           (sys-prompt-max-tokens-string (if (and max-tokens
+                                                  cui-restapi-add-max-tokens-recommendation)
+                                             (concat sys-prompt " " (cui-restapi--get-length-recommendation max-tokens))
+                                           ;; else
+                                           sys-prompt))
            (messages (unless (eql req-type 'completion)
                        ;; - split content to messages
                        (cui-block-tags-get-content-ai-messages
@@ -333,7 +353,7 @@ Return list of strings to print."
                         nil ; not-clear-properties
                         nil ; cui-block-markers
                         nil ; disable-tags
-                        req-type sys-prompt max-tokens-string)))) ; for else see :prompt
+                        req-type sys-prompt-max-tokens-string)))) ; for else see :prompt
       (list
        (cui-restapi--get-endpoint messages service)
        (cui-restapi--get-headers service)
@@ -365,10 +385,10 @@ block was found, otherwise nil."
               (res-str (if arg
                            (pp-to-string (cui-expand-block-deep))
                          ;; - just content with expanded links:
-                         (cui-block-tags-get-content element
-                                                     t		; noweb-control
-                                                     nil	; links-only-last
-                                                     t))))	; not-clear-properties
+                         (cui-block-tags-get-content-main element
+                                                          t		; noweb-control
+                                                          nil	; links-only-last
+                                                          t))))	; not-clear-properties
     (if (called-interactively-p 'any)
         (let ((buf (get-buffer-create "*CUI Preview*")))
           (with-help-window buf (with-current-buffer buf
