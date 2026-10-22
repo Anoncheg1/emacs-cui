@@ -492,16 +492,11 @@ Universal interactive version of `cui-block-fill-paragraph'.
 Works if cursor in cui block.
 If optional argument ARG is non-nil, mark current message of chat."
   (interactive)
-  ;; (cui--debug "cui-fill-paragraph")
-  (if-let ((element (cui-block-p)))
-      ;; (or
-       (call-interactively #'cui-block-fill-paragraph)
-          ;; (when (cui-block-fill-region (point)
-          ;;                              (save-excursion (forward-paragraph)
-          ;;                                              (point)))
-          ;;        (message "Line"))) ; ? TODO: fix this
-    ;; else
-    (cui--call-next-remap-protected #'org-fill-paragraph)))
+  (let ((element (cui-block-p)))
+    (if element
+        (call-interactively #'cui-block-fill-paragraph)
+      ;; else
+      (cui--call-next-remap-protected #'org-fill-paragraph))))
 
 (defun cui-next-item (arg)
   "Call `org-next-visible-heading' or move to next ai item.
@@ -624,21 +619,23 @@ If NO-EVAL is non-nil, do not evaluate Lisp in parameters."
 (defun cui--org-babel-where-is-src-block-head-advice (orig-fun &rest args)
   "Advice for `org-babel-tangle' related function.
 ORIG-FUN is `org-babel-where-is-src-block-head' and its ARGS."
-  (if-let ((element (or (and args (cui-block-p (car args)))
-                      (cui-block-p))))
-      (org-element-property :begin element)
-    ;; else
-  (apply orig-fun args)))
+  (let ((element (or (and args (cui-block-p (car args)))
+                     (cui-block-p))))
+    (if element
+        (org-element-property :begin element)
+      ;; else
+      (apply orig-fun args))))
 
 
 (defun cui--org-babel-get-src-block-info-advice (orig-fun &rest args)
   "Advice for `org-babel-tangle' related function.
 ORIG-FUN is `cui--org-babel-get-src-block-info-advice' and its ARGS."
   (seq-let (no-eval datum) args
-    (if-let ((datum (or (cui-block-p datum) (cui-block-p))))
-      (cui--org-babel-get-src-block-info no-eval datum)
-      ;; else
-      (apply orig-fun args))))
+    (let ((datum (or (cui-block-p datum) (cui-block-p))))
+      (if datum
+          (cui--org-babel-get-src-block-info no-eval datum)
+        ;; else
+        (apply orig-fun args)))))
 ;; -=-= xref for Markdown blocks
 
 (defun cui-xref-elisp-advice (orig-fun &rest args)
@@ -715,33 +712,35 @@ Optional argument ARGS is `xref-find-definitions' related arguments."
   "Simplify getting url buffers associated with cui block ELEMENT.
 Or for cui block at current position in current buffer.
 Used in `cui-open-request-buffer'."
-  (when-let ((element (or element (cui-block-p))))
-      (cui-timers--get-keys-for-variable (cui-block-get-header-marker element))))
+  (let ((element (or element (cui-block-p))))
+    (when element
+      (cui-timers--get-keys-for-variable (cui-block-get-header-marker element)))))
 
 (defun cui-open-request-buffer ()
   "Opens the url request buffer for cui block at current position."
   (interactive)
-  (if-let ((element (cui-block-p)))
-      (if-let* ((url-buffer (car (cui--get-buffers-for-element element)))
-                (display-buffer-base-action
-                 (list '(
-                         ;; display-buffer--maybe-same-window  ;FIXME: why isn't this redundant?
-                         display-buffer-reuse-window ; pop up bottom window
-                         display-buffer-in-previous-window ;; IF RIGHT WINDOW EXIST
-                         display-buffer-in-side-window ;; right side window - MAINLY USED
-                         display-buffer--maybe-pop-up-frame-or-window ;; create window
-                         ;; ;; If all else fails, pop up a new frame.
-                         display-buffer-pop-up-frame )
-                       '(window-width . 0.6) ; 80 percent
-                       '(side . right))))
-          (progn
-            (pop-to-buffer url-buffer)
-            (with-current-buffer url-buffer
-              (local-set-key (kbd "C-c ?") 'delete-window)))
-        ;; else
-        (message "No url buffer found"))
-  ;; - else - no element - call original Org key
-  (cui--call-next-key-remap-protected "C-c C-.")))
+  (let ((element (cui-block-p)))
+    (if element
+        (if-let* ((url-buffer (car (cui--get-buffers-for-element element)))
+                  (display-buffer-base-action
+                   (list '(
+                           ;; display-buffer--maybe-same-window  ;FIXME: why isn't this redundant?
+                           display-buffer-reuse-window ; pop up bottom window
+                           display-buffer-in-previous-window ;; IF RIGHT WINDOW EXIST
+                           display-buffer-in-side-window ;; right side window - MAINLY USED
+                           display-buffer--maybe-pop-up-frame-or-window ;; create window
+                           ;; ;; If all else fails, pop up a new frame.
+                           display-buffer-pop-up-frame )
+                         '(window-width . 0.6) ; 80 percent
+                         '(side . right))))
+            (progn
+              (pop-to-buffer url-buffer)
+              (with-current-buffer url-buffer
+                (local-set-key (kbd "C-c ?") 'delete-window)))
+          ;; else
+          (message "No url buffer found"))
+      ;; - else - no element - call original Org key
+      (cui--call-next-key-remap-protected "C-c C-."))))
 
 ;; -=-= Minor mode - string line
 (defvar cui-mode-line-string "")
