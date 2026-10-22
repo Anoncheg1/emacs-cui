@@ -207,7 +207,7 @@ If you specify :chain at block parameters line, associated function will
   :group 'cui)
 
 (defcustom cui-before-send-hook nil
-  "For changing last message before sending, in buffer, before reading it.
+  "For changing last message in buffer before preparing and sending.
 Run before request preparation before splitting cui block to chat messages.
 Accept two arguemnts - begin positions of the last message.
 - begin at begining of the line with message prefix

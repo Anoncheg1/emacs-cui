@@ -162,6 +162,10 @@ This hook remove empty lines if there is too much of them in response.
 #+end_src
 
 ** Optional hooks before sending request
+This hook removes excess indentation from markdown blocks in the last user message, directly in the buffer, before it is prepared and sent.
+#+begin_src elisp :lexical t :results none :exports code :eval no
+(add-hook 'cui-before-send-hook #'cui-optional-markdown-blocks-remove-indentation-hook-function)
+#+end_src
 ** Optional Markdown folding
 We provide ~cui-optional-markdown-cycle~ function same as ~org-cycle~. It allow to fold and unfold markdown headers in cui block.
 

@@ -105,7 +105,7 @@ Should be added the last to be executed first."
      " " org-outline-regexp-bol before-pos (point))))
 
 ;; -=-= remove-indentation hook - pre-send
-(defun cui-optional-my-dedent-spaces (text)
+(defun cui-optional-my-dedent-spaces-string (text)
   "Remove common leading spaces from TEXT."
   (let ((lines (split-string text "\n"))
         (min-indent nil))
@@ -123,6 +123,45 @@ Should be added the last to be executed first."
        (lambda (line)
            (substring line (min (length (string-trim-left line "")) min-indent)))
        lines "\n")))))
+
+
+(defun cui-optional-my-dedent-spaces (begin end)
+  "Remove common leading spaces from lines in region BEGIN..END."
+  (interactive "*r")
+  (save-restriction
+    (narrow-to-region begin end)
+    (save-excursion
+      (goto-char (point-min))
+      (let ((min-indent nil))
+        ;; Pass 1: find minimum leading-space count over non-blank lines.
+        (while (not (eobp))
+          (let ((bol (point))
+                (eol (line-end-position)))
+            (when (re-search-forward "[^ \r]" eol t)
+              (setq min-indent
+                    (min (or min-indent most-positive-fixnum)
+                         (- (match-beginning 0) bol)))))
+          (forward-line 1))
+        ;; Pass 2: strip min-indent leading spaces from each line.
+        (when (and min-indent (> min-indent 0))
+          (goto-char (point-min))
+          (while (not (eobp))
+            (delete-region (point)
+                           (min (+ (point) min-indent) (line-end-position)))
+            (forward-line 1)))))))
+
+(defun cui-optional-markdown-blocks-remove-indentation-hook-function (beg end)
+  "Remove common indentation from markdown blocks in the last user messagges.
+Arguments BEG END described in
+`cui-before-send-hook' hook."
+  (cui--debug "cui-optional-markdown-blocks-remove-indentation-hook-function HOOK: %s %s" beg end)
+
+    (let ((bounds (nreverse (cui-block--markdown-block-regions beg end)))) ; from bottom
+      (while bounds
+        (let* ((stop (1- (pop bounds)))
+               (start (1- (progn (goto-char (pop bounds)) (forward-line) (point)))))
+          (when (> stop start) ; just in case
+                   (cui-optional-my-dedent-spaces start stop))))))
 
 ;; -=-= Markdown: folding - cycling
 
