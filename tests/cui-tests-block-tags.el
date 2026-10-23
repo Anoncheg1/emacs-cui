@@ -820,25 +820,6 @@ File \"a.el\":
 ss
 ```")))
 
-;; -=-= Test: cui-block-tags--compose-m-block
-(ert-deftest cui-tests-block-tags--compose-m-block ()
-  (should
-   (string-equal (cui-block-tags--compose-m-block "aaa" :lang "bbb" :header "ccc") "\nccc\n```bbb\naaa\n```"))
-  ;; Header are ignored for cui block
-  (should
-   (string-equal (cui-block-tags--compose-m-block "asda\n[me:] asdas" :lang "ai" :header "some header") "asda\n[me:] asdas"))
-  (should
-   (string-equal (cui-block-tags--compose-m-block "[me:] asda\n[ai:] asdas" :lang "ai" :header "some header") "[me:] asda\n[ai:] asdas"))
-  (should
-   (string-equal (cui-block-tags--compose-m-block "Text\nasdas" :lang "ai" :header "Header:")
-                 "Text\nasdas"))
-  (should
-   (string-equal (cui-block-tags--compose-m-block "Text\nasdas" :lang "ai" :header "Header:" :inner t)
-                 "\nHeader:\n```ai\nText\nasdas\n```"))
-  (should (equal (cui-block-tags--compose-m-block nil :lang "ai" :inner t) nil))
-  (should (equal (cui-block-tags--compose-m-block nil :lang "ai" :inner nil) nil))
-  (should (equal (cui-block-tags--compose-m-block nil :lang nil :inner t) nil)))
-
 ;; -=-= Test: cui-block-tags--markdown-block-string-p
 (ert-deftest cui-tests-block-tags--position-in-markdown-block-str-p ()
   (let* ((line "aaa```bbb```ccc")

@@ -1,6 +1,6 @@
 ;;; cui-block-tags.el --- Handling links inside cui block  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025 github.com/Anoncheg1
+;; Copyright (C) 2026 github.com/Anoncheg1
 ;; Author: <github.com/Anoncheg1,codeberg.org/Anoncheg>
 ;; SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -257,43 +257,6 @@ Return new string."
       string)))
 
 
-(cl-defun cui-block-tags--compose-m-block (content &optional &key lang header inner)
-  "Surround CONTENT string in markdown block with HEADER string.
-Surrounded markdown block have LANG or \"auto\".
-Markdown blocks in CONTENT are escaped.
-
-Optional arguments:
-- LANG is a language of content, it is used in header.
-- HEADER is a line above markdown to describe it for LLM, should not have
- new line characters at edges.
-- INNER if non-nil AI language content should be wrapped in
- markdown block, HEADER is ignored
-- HEADER added after first chat prefix or just at the begining if
- CONTENT dont starts with chat prefix.
-To detect LANG use `cui-block-tags--filepath-to-language'.
-- INNER, is used for special case to insert cui block without wrapping.
-Return string."
-  (cui--debug "cui-block-tags--compose-m-block N1 inner=%s lang=%s header=%s" inner lang header)
-  (cui--debug "cui-block-tags--compose-m-block N2" content)
-  ;; trivial case
-  (if (or (not content)
-          (string-empty-p content))
-      nil
-    ;; else - special, not wrap in markdown block.
-    (if (and lang (string-equal-ignore-case "ai" lang) (not inner))
-        content
-      ;; else
-      (let ((content (when content
-                       (concat "\n```" (or lang "auto") "\n"
-                               ;; replace
-                               (string-replace "```" "\\`\\`\\`"
-                                               (replace-regexp-in-string cui-block--chat-prefixes-re
-                                                                         "_\\&"
-                                                                         content))
-                               "\n```"))))
-        (cui--debug "cui-block-tags--compose-m-block N3" content)
-      (concat (when header (concat "\n" header)) content))))) ; no error if content is nil
-
 ;; Not used
 ;; (defun cui-block-tags--compose-block-for-path-content (path-string content &optional lang)
 ;;   "Return mardown block with description.
@@ -303,7 +266,7 @@ Return string."
 ;; If optional argument LANG is string it is used as a language of content,
 ;;  otherwise it is detected by extension of PATH-STRING.
 ;; Return string."
-;;   (cui-block-tags--compose-m-block
+;;   (cui-block--compose-m-block
 ;;    ;; content:
 ;;    content
 ;;    :lang (or lang (cui-block-tags--filepath-to-language path-string))
@@ -410,7 +373,7 @@ Return string or nil or raise user-error."
          (cui-block-tags--file-binary-p path-string))
     (user-error "File link is binary and not supported (not image and audio) for text request"))
    (t
-    (cui-block-tags--compose-m-block
+    (cui-block--compose-m-block
      ;; content:
      (or content
          (if (file-directory-p path-string)
@@ -670,7 +633,7 @@ Return list range if POS (an index) is inside a '```' code block in STR,
   "Return markdown block for supported Org blocks at current position.
 Works only supported blocks in `cui-block-tags-org-blocks-types' and ai
  block.
-cui block handled specially in cui-block-tags--compose-m-block'.
+cui block handled specially in cui-block--compose-m-block'.
 Move pointer to the end of block.
 
 Optional argiments:
@@ -684,7 +647,7 @@ Return full content of block or nil."
   (let ((element (or element (cui-block-tags--block-at-point))))
     (when element
       ;; (cui--debug "cui-block-tags--get-content-org-block-at-point3 %s" tags-control)
-      (cui-block-tags--compose-m-block
+      (cui-block--compose-m-block
        ;; content
        (cui-block-tags-get-content-main element nil nil nil cui-block-markers) ; may cause recursion
        :lang (if (eq (org-element-type element) 'src-block)
@@ -809,7 +772,7 @@ Return string or nil."
                (beginning-of-defun)
                (point))
              (line-beginning-position)))
-    (cui-block-tags--compose-m-block
+    (cui-block--compose-m-block
      ;; content:
      (buffer-substring-no-properties (point)
                                      (save-excursion (end-of-defun)
@@ -829,7 +792,7 @@ Return string or nil."
                                        (forward-line -1)
                                        (line-end-position))
                        (point-max)))) ; return position or nil
-      (cui-block-tags--compose-m-block
+      (cui-block--compose-m-block
        ;; content:
        (buffer-substring-no-properties beg-pos end-pos)
        :lang (cui-block-tags--filepath-to-language major-mode)
@@ -847,7 +810,7 @@ Return string or nil."
    ;;  (save-excursion
    ;;    (forward-line)
    ;;    (backward-paragraph)
-   ;;    (cui-block-tags--compose-m-block
+   ;;    (cui-block--compose-m-block
    ;;          ;; content:
    ;;     (buffer-substring-no-properties (save-excursion (forward-line)
    ;;                                                     (line-beginning-position))
@@ -948,7 +911,7 @@ Return string or nil."
      ;; - (6) case - Org element with :end
      ;; ((when-let ((end (org-element-property :end element))) ; safe
      ;;    (cui--debug "cui-block-tags--get-content-at-point-org (6) case %s" (point) type end cui-block-markers)
-     ;;    (cui-block-tags--compose-m-block (buffer-substring-no-properties (line-beginning-position) end))))
+     ;;    (cui-block--compose-m-block (buffer-substring-no-properties (line-beginning-position) end))))
 
      (t
       (user-error "Cant get content at point for link in Org buffer")))))
@@ -1001,7 +964,7 @@ Return string or nil."
                 (if (and pos1 pos2)
                     (progn
                       (cui--debug "cui-block-tags--get-org-links-content N3 %s %s" pos1 pos2)
-                      (cui-block-tags--compose-m-block (buffer-substring-no-properties pos1 pos2)
+                      (cui-block--compose-m-block (buffer-substring-no-properties pos1 pos2)
                                                        :lang (cui-block-tags--filepath-to-language (or (and (derived-mode-p 'fundamental-mode)
                                                                                                             buffer-file-name)
                                                                                                        major-mode))))
@@ -1313,7 +1276,7 @@ or vector if content have links to images."
         (if-let* ((bt (or (cui-block-tags--get-backtrace-buffer-string)
                           (user-error "No backtrace buffer for @Backtrace tag"))) ; *Backtrace* buffer exist
                   (bt (cui-block-tags--take-n-lines bt cui-block-tags-backtrace-max-lines))
-                  (bt (cui-block-tags--compose-m-block bt
+                  (bt (cui-block--compose-m-block bt
                                                        :lang "backtrace")) ; prepare string
                   (new-string (cui-block-tags--replace-last-regex-smart string cui-block-tags--regexes-backtrace bt))) ; insert backtrace
             (setq string new-string)))))

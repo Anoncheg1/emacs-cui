@@ -1163,6 +1163,109 @@ This version avoids rectangles and uses only text-based branches and nodes. This
   ;; ;; regions nil, should fallback to default, but here returns nil
   ;; (should (equal (cui-block--find-next-prev-region 1 15 nil) nil)))
 )
+;; -=-= Test: `cui-block--compose-m-block'
+(ert-deftest cui-tests-block-tags--compose-m-block ()
+  (should
+   (string-equal (cui-block--compose-m-block "aaa" :lang "bbb" :header "ccc") "\nccc\n```bbb\naaa\n```"))
+  ;; Header are ignored for cui block
+  (should
+   (string-equal (cui-block--compose-m-block "asda\n[me:] asdas" :lang "ai" :header "some header") "asda\n[me:] asdas"))
+  (should
+   (string-equal (cui-block--compose-m-block "[me:] asda\n[ai:] asdas" :lang "ai" :header "some header") "[me:] asda\n[ai:] asdas"))
+  (should
+   (string-equal (cui-block--compose-m-block "Text\nasdas" :lang "ai" :header "Header:")
+                 "Text\nasdas"))
+  (should
+   (string-equal (cui-block--compose-m-block "Text\nasdas" :lang "ai" :header "Header:" :inner t)
+                 "\nHeader:\n```ai\nText\nasdas\n```"))
+  (should (equal (cui-block--compose-m-block nil :lang "ai" :inner t) nil))
+  (should (equal (cui-block--compose-m-block nil :lang "ai" :inner nil) nil))
+  (should (equal (cui-block--compose-m-block nil :lang nil :inner t) nil)))
+
+;; -=-= Test: `cui-block--indentation-dedent-string'
+(ert-deftest cui-block--indentation-dedent-string-tests ()
+  (should (equal (cui-block--indentation-dedent-string "\t a\n\t  b") "\t a\n\t  b"))
+  (should (equal (cui-block--indentation-dedent-string "  a\n\t  b") "  a\n\t  b"))
+  (should (equal (cui-block--indentation-dedent-string "   a\n   \tb") "a\n\tb"))
+  (should (equal (cui-block--indentation-dedent-string "  a\n   b") "a\n b"))
+  (should (equal (cui-block--indentation-dedent-string "   a\n b") "  a\nb"))
+  (should (equal (cui-block--indentation-dedent-string "   a\n\n b") "  a\n\nb"))
+  (should (equal (cui-block--indentation-dedent-string "   a\n \n b") "  a\n\nb"))
+  (should (equal (cui-block--indentation-dedent-string "   a\n \t\n b") "  a\n\t\nb"))
+  (should (equal (cui-block--indentation-dedent-string "  a\nb ") "  a\nb "))
+)
+
+(ert-deftest cui-block--indentation-dedent-string/crlf-input- ()
+  ""
+  (should (equal (cui-block--indentation-dedent-string "  a\r\n  b\r\n") "a\r\nb\r\n")))
+
+(ert-deftest cui-block--indentation-dedent-string/tab-indent-is-not-stripped ()
+  "A line indented with a tab computes indent 0 and blocks dedent."
+  (should (equal (cui-block--indentation-dedent-string "    a\n\tb") "    a\n\tb")))
+
+(ert-deftest cui-block--indentation-dedent-string/single-line-with-trailing-newline ()
+  "One indented line plus trailing newline round-trips cleanly."
+  (should (equal (cui-block--indentation-dedent-string "    x\n") "x\n")))
+
+(ert-deftest cui-block--indentation-dedent-string/spaces-only-single-line-is-noop ()
+  "A whitespace-only string is returned verbatim (no min to compute)."
+  (should (equal (cui-block--indentation-dedent-string "    ") "    ")))
+
+(ert-deftest cui-block--indentation-dedent-string/dedent-then-reindent-roundtrip ()
+  "Dedenting then re-adding the original min indent restores the input,
+for non-blank lines."
+  (let* ((in  "    a\n      b\n    c")
+         (out (cui-block--indentation-dedent-string in)))
+    (should (equal (mapconcat (lambda (l) (concat "    " l))
+                              (split-string out "\n") "\n")
+                   in))))
+
+
+;; -=-= For `cui-block--indentation-dedent-lines'
+(defun cui-block--dedent-in-buffer (s)
+  "Run `cui-optional-my-dedent-spaces' on string S via a temp buffer."
+  (with-temp-buffer
+    (insert s)
+    (cui-block--indentation-dedent-lines 1 (line-number-at-pos (point-max)))
+    (buffer-string)))
+
+(ert-deftest cui-block--indentation-dedent-lines-tests ()
+  (should (equal (cui-block--dedent-in-buffer "\t a\n\t  b") "\t a\n\t  b"))
+  (should (equal (cui-block--dedent-in-buffer "  a\n\t  b") "  a\n\t  b"))
+  (should (equal (cui-block--dedent-in-buffer "   a\n   \tb") "a\n\tb"))
+  (should (equal (cui-block--dedent-in-buffer "  a\n   b") "a\n b"))
+  (should (equal (cui-block--dedent-in-buffer "   a\n b") "  a\nb"))
+  (should (equal (cui-block--dedent-in-buffer "   a\n\n b") "  a\n\nb"))
+  (should (equal (cui-block--dedent-in-buffer "   a\n \n b") "  a\n\nb"))
+  (should (equal (cui-block--dedent-in-buffer "   a\n \t\n b") "  a\n\t\nb"))
+  (should (equal (cui-block--dedent-in-buffer "  a\nb ") "  a\nb ")))
+
+(ert-deftest cui-block--indentation-dedent-lines/crlf-input- ()
+  ""
+  (should (equal (cui-block--dedent-in-buffer "  a\r\n  b\r\n") "a\r\nb\r\n")))
+
+(ert-deftest cui-block--indentation-dedent-lines/tab-indent-is-not-stripped ()
+  "A line indented with a tab computes indent 0 and blocks dedent."
+  (should (equal (cui-block--dedent-in-buffer "    a\n\tb") "    a\n\tb")))
+
+(ert-deftest cui-block--indentation-dedent-lines/single-line-with-trailing-newline ()
+  "One indented line plus trailing newline round-trips cleanly."
+  (should (equal (cui-block--dedent-in-buffer "    x\n") "x\n")))
+
+(ert-deftest cui-block--indentation-dedent-lines/spaces-only-single-line-is-noop ()
+  "A whitespace-only string is returned verbatim (no min to compute)."
+  (should (equal (cui-block--dedent-in-buffer "    ") "    ")))
+
+(ert-deftest cui-block--indentation-dedent-lines/dedent-then-reindent-roundtrip ()
+  "Dedenting then re-adding the original min indent restores the input,
+for non-blank lines."
+  (let* ((in  "    a\n      b\n    c")
+         (out (cui-block--dedent-in-buffer in)))
+    (should (equal (mapconcat (lambda (l) (concat "    " l))
+                              (split-string out "\n") "\n")
+                   in))))
+
+
 ;; -=-= Test: fill paragraph
 
 (defmacro cui-block-test-with-fill-env (input expected &rest body)

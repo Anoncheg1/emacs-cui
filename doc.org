@@ -442,7 +442,7 @@ How? We keep trace of all cui blocks that was pros a list of header markers. Do 
 
 * Markdown: ```blocks
 
-Prepare markdown block  `cui-block-tags--compose-m-block' - used by:
+Prepare markdown block  `cui-block--compose-m-block' - used by:
 - `cui-block-tags--compose-block-for-path-full'
 - `cui-block-tags--get-content-at-point-not-org'
 - `cui-block-tags--get-content-at-point-org'

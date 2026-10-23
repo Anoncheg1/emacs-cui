@@ -1,6 +1,6 @@
 ;;; cui-block.el --- ai special block related variables and code -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025 github.com/Anoncheg1,codeberg.org/Anoncheg
+;; Copyright (C) 2026 github.com/Anoncheg1,codeberg.org/Anoncheg
 ;; SPDX-License-Identifier: AGPL-3.0-or-later
 ;; Author: <github.com/Anoncheg1,codeberg.org/Anoncheg>
 
@@ -281,7 +281,7 @@ Return element or nil."
           sel)))))
 
 
-;; -=-= info fn: get-info, get-request-type, get-sys
+;; -=-= info - get-info, get-request-type, get-sys
 (defun cui-block-get-info (&optional element no-eval)
   "Parse the header of cui block.
 ELEMENT is the element of the special block.
@@ -321,7 +321,7 @@ DEFAULT is a string with default system prompt for LLM."
       ;; else - nil or string
       sys-raw)))
 
-;; -=-= macro: let-params
+;; -=-= info - get-val
 
 ;; Logic & Purpose:
 ;;  ----------------
@@ -564,7 +564,7 @@ If func-list is nil return original VAR-LIST."
                    ',var-list)))
      vals))
 
-;; -=-= fn: find-region by position
+;; -=-= regions list: find-region by position
 
 (defun cui-block--find-region-with-position (regions pos)
   "Find region for POS in REGIONS provided.
@@ -602,7 +602,27 @@ POS should be within any region, or at its left boundary.  Else return
           ;; else
           nil))))
 
-;; -=-= fns: Markdown - block check pos
+;; -=-= at-special-p
+
+(defun cui-block--at-special-p (pos &optional dont-check-tables)
+  "Check if POS: quoted, is a table or at line with chat prefix.
+Optional argument LIM-BEG is cui block begining position.
+Return t if pos in markdown block, table or quote.
+Side-effect: set pointer position to POS.
+If Optional argument DONT-CHECK-TABLES is not-nil disable checking if
+pos at Org table."
+  (goto-char pos)
+  (prog1
+      ;; not quoted, in tables
+      (progn (goto-char pos)
+             (beginning-of-line)
+             (or (looking-at "^\\s-*> ") ; from `cui-block-fill-region-as-paragraph'
+                 (looking-at cui-block--chat-prefixes-re)
+                 (and (not dont-check-tables) (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))) ; skip tables
+    (goto-char pos)))
+
+
+;; -=-= Markdown - block - regions, block-p, content-range
 
 (defun cui-block--markdown-block-regions (beg end)
   "Return position of markdown subblocks begining and ending headers.
@@ -689,22 +709,6 @@ M-BLOCK-START M-BLOCK-END are line begin position of markdown range with
           (point))
         (point)))
 
-(defun cui-block--at-special-p (pos &optional dont-check-tables)
-  "Check if POS in markdown block, quoted or is a table.
-Optional argument LIM-BEG is cui block begining position.
-Return t if pos in markdown block, table or quote.
-Side-effect: set pointer position to POS.
-If Optional argument DONT-CHECK-TABLES is not-nil disable checking if
-pos at Org table."
-  (goto-char pos)
-  (prog1
-      ;; not quoted, in tables
-      (progn (goto-char pos)
-             (beginning-of-line)
-             (or (looking-at "^\\s-*> ") ; from `cui-block-fill-region-as-paragraph'
-                 (looking-at cui-block--chat-prefixes-re)
-                 (and (not dont-check-tables) (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))) ; skip tables
-    (goto-char pos)))
 
 (defun cui-block--markdown-quotes-at-line-p (pos &optional delimiter beg end)
   "Return t if POS is inside any markdown quotes at current line.
@@ -735,7 +739,103 @@ on the current line.
       (cui-block--markdown-quotes-at-line-p pos "```")))
 
 
-;; -=-= fns: Markdown - headers folding, end of current
+;; -=-= Markdown - block - compose
+;; cui-block-tags--compose-m-block
+(cl-defun cui-block--compose-m-block (content &optional &key lang header inner)
+  "Surround CONTENT string in markdown block with HEADER string.
+Surrounded markdown block have LANG or \"auto\".
+Markdown blocks in CONTENT are escaped.
+
+Optional arguments:
+- LANG is a language of content, it is used in header.
+- HEADER is a line above markdown to describe it for LLM, should not have
+ new line characters at edges.
+- INNER if non-nil AI language content should be wrapped in
+ markdown block, HEADER is ignored
+- HEADER added after first chat prefix or just at the begining if
+ CONTENT dont starts with chat prefix.
+To detect LANG use `cui-block-tags--filepath-to-language'.
+- INNER, is used for special case to insert cui block without wrapping.
+Return string."
+  (cui--debug "cui-block--compose-m-block N1 inner=%s lang=%s header=%s" inner lang header)
+  (cui--debug "cui-block--compose-m-block N2" content)
+  ;; trivial case
+  (if (or (not content)
+          (string-empty-p content))
+      nil
+    ;; else - special, not wrap in markdown block.
+    (if (and lang (string-equal-ignore-case "ai" lang) (not inner))
+        content
+      ;; else
+      (let ((content (when content
+                       (concat "\n```" (or lang "auto") "\n"
+                               ;; replace
+                               (string-replace "```" "\\`\\`\\`"
+                                               (replace-regexp-in-string cui-block--chat-prefixes-re
+                                                                         "_\\&"
+                                                                         content))
+                               "\n```"))))
+        (cui--debug "cui-block--compose-m-block N3" content)
+      (concat (when header (concat "\n" header)) content))))) ; no error if content is nil
+
+
+;; -=-= Markdown - block - fix indentation
+
+(defun cui-block--indentation-dedent-string (text)
+  "Remove common leading spaces from multi-line string TEXT.
+Return multi-line fixed string."
+  (let ((lines (split-string text "\n"))
+        (min-indent nil))
+    ;; Pass 1: minimum leading-space count over non-blank lines.
+    (dolist (line lines)
+      (unless (string-match-p "\\` *\\'" line) ; all spaces
+        (let ((indent (string-match "[^ ]" line)))  ; nil if all spaces
+        (setq indent (or indent (length line)))
+          (setq min-indent (if min-indent (min min-indent indent) indent)))))
+    ;; Pass 2: cut and concat lines
+    (cond
+     ((or (null min-indent) (zerop min-indent)) text)
+     (t
+      (mapconcat
+       (lambda (line)
+           (substring line (min (length (string-trim-left line "")) min-indent)))
+       lines "\n")))))
+
+(defun cui-block--indentation-dedent-lines (line-beg line-end)
+  "Remove common leading spaces from lines LINE-BEG..LINE-END.
+Where LINE-BEG from 1.
+Careful, move pointer.
+Modify current buffer."
+  ;; (interactive "*nStart line: \nnEnd line: ")
+  (cui--debug "cui-block--indentation-dedent-lines %s %s" line-beg line-end)
+  (goto-char (point-min))
+  (forward-line (1- line-beg))
+  (let* ((begin (point))
+         (nlines (- line-end line-beg -1))
+         (min-indent nil))
+    ;; Pass 1: find minimum leading-space count over non-blank lines.
+    (let ((n nlines))
+      (while (> n 0)
+        (let ((bol (point))
+              (eol (line-end-position)))
+          (when (re-search-forward "[^ \r]" eol t)
+            (setq min-indent
+                  (min (or min-indent most-positive-fixnum)
+                       (- (match-beginning 0) bol)))))
+        (forward-line 1)
+        (setq n (1- n))))
+    ;; Pass 2: strip min-indent leading spaces from each line.
+    (when (and min-indent (> min-indent 0))
+      (goto-char begin)
+      (let ((n nlines))
+        (while (> n 0)
+          (delete-region (point)
+                         (min (+ (point) min-indent) (line-end-position)))
+          (forward-line 1)
+          (setq n (1- n)))))))
+
+
+;; -=-= Markdown - headers folding, end of current
 (defun cui-block--markdown-heading-p ()
   "Check if cursor at # header, ignore markdown blocks.
 like `org-before-first-heading-p'."
@@ -1020,7 +1120,8 @@ Positions CONTENT-START CONTENT-END used as boundaries.
 If MARKDOWN-CHECK is not-nil, positions counted only if not in markdown
  block.
 Return positions  as start points  that match PREFIX-RE (normally  it is
-`cui-block--chat-prefixes-re'), and additional positions of content start
+`cui-block--chat-prefixes-re') at beginning of prefix,
+and additional positions of content start
 and content end at the beginin and the end of flat list."
   (when (< content-end content-start)
     (error "Point is at wrong position"))
@@ -1053,7 +1154,7 @@ and content end at the beginin and the end of flat list."
       positions)))
 
 (defun cui-block--chat-role-regions (&optional element)
-  "Splits the special block by role prompt.
+  "Simplification for `cui-block--get-chat-messages-positions'.
 Execution in not `org-mode' is supported.
 Optional argument ELEMENT should be cui block
 Return line begining positions of first line of content, roles,
@@ -1067,6 +1168,18 @@ Return line begining positions of first line of content, roles,
     (cui-block--get-chat-messages-positions con-beg con-end cui-block--chat-prefixes-re)))
 
 
+(defun cui-block--chat-the-last-region (&optional element)
+  "For cui-block ELEMENT return cons of last message beginin and end positions."
+  (let* ((positions (cui-block--chat-role-regions element))
+         (last-beg (car (last positions 2))) ; line begin position with prefix
+         (last-end (car (last positions)))) ; beginin of line of the final #+end of cui
+    ;; skip chat prefix
+    (save-excursion
+      (goto-char last-beg)
+      (when (re-search-forward cui-block--chat-prefixes-re (line-end-position) t)
+        (when (eq (match-beginning 0) last-beg)
+          (setq last-beg (point)))))
+    (cons last-beg last-end)))
 
 ;; -=-= Interactive: mark-at-point
 

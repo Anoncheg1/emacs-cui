@@ -1,6 +1,6 @@
 ;;; cui-optional.el --- Useful functions that not enabled by default.  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025 github.com/Anoncheg1
+;; Copyright (C) 2026 github.com/Anoncheg1
 ;; Author: <github.com/Anoncheg1,codeberg.org/Anoncheg>
 ;; SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -105,63 +105,28 @@ Should be added the last to be executed first."
      " " org-outline-regexp-bol before-pos (point))))
 
 ;; -=-= remove-indentation hook - pre-send
-(defun cui-optional-my-dedent-spaces-string (text)
-  "Remove common leading spaces from TEXT."
-  (let ((lines (split-string text "\n"))
-        (min-indent nil))
-    ;; Pass 1: minimum leading-space count over non-blank lines.
-    (dolist (line lines)
-      (unless (string-match-p "\\` *\\'" line) ; all spaces
-        (let ((indent (string-match "[^ ]" line)))  ; nil if all spaces
-        (setq indent (or indent (length line)))
-          (setq min-indent (if min-indent (min min-indent indent) indent)))))
-
-    (cond
-     ((or (null min-indent) (zerop min-indent)) text)
-     (t
-      (mapconcat
-       (lambda (line)
-           (substring line (min (length (string-trim-left line "")) min-indent)))
-       lines "\n")))))
-
-
-(defun cui-optional-my-dedent-spaces (begin end)
-  "Remove common leading spaces from lines in region BEGIN..END."
-  (interactive "*r")
-  (save-restriction
-    (narrow-to-region begin end)
-    (save-excursion
-      (goto-char (point-min))
-      (let ((min-indent nil))
-        ;; Pass 1: find minimum leading-space count over non-blank lines.
-        (while (not (eobp))
-          (let ((bol (point))
-                (eol (line-end-position)))
-            (when (re-search-forward "[^ \r]" eol t)
-              (setq min-indent
-                    (min (or min-indent most-positive-fixnum)
-                         (- (match-beginning 0) bol)))))
-          (forward-line 1))
-        ;; Pass 2: strip min-indent leading spaces from each line.
-        (when (and min-indent (> min-indent 0))
-          (goto-char (point-min))
-          (while (not (eobp))
-            (delete-region (point)
-                           (min (+ (point) min-indent) (line-end-position)))
-            (forward-line 1)))))))
 
 (defun cui-optional-markdown-blocks-remove-indentation-hook-function (beg end)
   "Remove common indentation from markdown blocks in the last user messagges.
 Arguments BEG END described in
 `cui-before-send-hook' hook."
-  (cui--debug "cui-optional-markdown-blocks-remove-indentation-hook-function HOOK: %s %s" beg end)
-
+  (cui--debug "cui-optional-markdown-blocks-remove-indentation-hook-function N1HOOK: %s %s" beg end)
+  (save-excursion
     (let ((bounds (nreverse (cui-block--markdown-block-regions beg end)))) ; from bottom
       (while bounds
-        (let* ((stop (1- (pop bounds)))
-               (start (1- (progn (goto-char (pop bounds)) (forward-line) (point)))))
-          (when (> stop start) ; just in case
-                   (cui-optional-my-dedent-spaces start stop))))))
+        (let* ((block-end (pop bounds))
+               (block-beg (pop bounds))
+               ;; Skip the block's opening line (e.g. the ``` fence line).
+               (line-beg (progn
+                           (goto-char block-beg)
+                           (forward-line)
+                           (line-number-at-pos)))
+               (line-end (progn
+                           (goto-char block-end)
+                           (1- (line-number-at-pos)))))
+          (cui--debug "cui-optional-markdown-blocks-remove-indentation-hook-function N2 HOOK: %s %s" line-beg line-end)
+          (when (> line-end line-beg) ; at least two lines: one body + closing
+            (cui-block--indentation-dedent-lines line-beg line-end)))))))
 
 ;; -=-= Markdown: folding - cycling
 

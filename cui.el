@@ -1,6 +1,6 @@
 ;;; cui.el --- Chat blocks in org-mode for LLM and agents -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025 github.com/Anoncheg1,codeberg.org/Anoncheg
+;; Copyright (C) 2026 github.com/Anoncheg1,codeberg.org/Anoncheg
 ;; Author: <github.com/Anoncheg1,codeberg.org/Anoncheg>
 ;; Keywords: org, comm, url, link
 ;; URL: https://codeberg.org/Anoncheg/emacs-cui
@@ -32,8 +32,8 @@
 
 ;;; Commentary:
 
-;; CUI as a minor mode extend Org major mode with "cui block" that
-;;   allows you to interact with the OpenAI-compatible REST APIs.
+;; CUI (chat user interface) adds a "cui block" to Org mode that lets
+;;  you interact with LLMs via OpenAI-compatible REST APIs.
 
 ;; CUI was inspired by org-ai package of Robert Krahn <https://github.com/rksm/org-ai>
 
@@ -210,8 +210,9 @@ If you specify :chain at block parameters line, associated function will
   "For changing last message in buffer before preparing and sending.
 Run before request preparation before splitting cui block to chat messages.
 Accept two arguemnts - begin positions of the last message.
-- begin at begining of the line with message prefix
-- end at the end of the last line of message."
+In current buffer:
+- begin - markger at begining of the line with message prefix.
+- end - marker at the end of the last line of message."
   :type 'hook
   :group 'cui)
 
@@ -307,14 +308,20 @@ NOWEB-CONTROL is bool a result of processing ai header and Org
 SYS-PROMPT is :sys keyword of cui block that will be placed as the first
  system message in chat.
 MAX-TOKENS is integer limit for LLM output.
+Note: Works in current buffer only.
 Return string or vector."
   ;; hook
-  (let* ((positions (cui-block--get-chat-messages-positions (org-element-property :contents-begin element)
-                                                           (org-element-property :contents-end element)
-                                                           cui-block--chat-prefixes-re))
-        (last-beg (car (last positions 2)))
-        (last-end (1- (car (last positions)))))
-    (run-hook-with-args 'cui-before-send-hook last-beg last-end))
+  (let* ((reg (cui-block--chat-the-last-region element))
+         (last-beg (car reg)) ; after perfix
+         (last-end (cdr reg))
+         (last-beg-m (make-marker))
+         (last-end-m (make-marker)))
+    (set-marker last-beg-m last-beg)
+    (set-marker last-end-m last-end)
+    (run-hook-with-args 'cui-before-send-hook last-beg last-end)
+    (set-marker last-beg-m nil)
+    (set-marker last-end-m nil))
+
   ;; main
   (if (eql req-type 'completion) ; old
       (cui-block-tags-replace (string-trim (cui-block-get-content element))) ; return string

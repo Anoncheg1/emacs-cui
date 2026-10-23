@@ -1,6 +1,6 @@
 ;;; cui-async1.el --- Unroll async chains of parallel and sequencial callbacks -*- lexical-binding: t -*-
 
-;; Copyright (c) 2025 github.com/Anoncheg1,codeberg.org/Anoncheg
+;; Copyright (c) 2026 github.com/Anoncheg1,codeberg.org/Anoncheg
 ;; SPDX-License-Identifier: AGPL-3.0-or-later
 ;; Author: <github.com/Anoncheg1,codeberg.org/Anoncheg>
 ;; Keywords: tools, async, callback
