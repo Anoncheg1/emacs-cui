@@ -939,8 +939,7 @@ Return string or nil"
 
 
 ;; (featurep 'org-links)
-54(when (locate-library "org-links")
-  (declare-function org-links--local-get-target-position-for-link "org-links"))
+(declare-function org-links--local-get-target-position-for-link "org-links")
 
 ;; (when (require 'org-links nil 'noerror)
 (defun cui-block-tags--get-org-links-content (link &optional cui-block-markers)
