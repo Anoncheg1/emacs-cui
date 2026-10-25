@@ -110,7 +110,7 @@ jobs:
             echo "Melpazoid warning detected, failing workflow" ; exit 1
           fi
           if grep ' with package-lint ' output.log | grep -q . ; then
-            echo "Warnings detected, failing workflow" ; exit 1
+            echo "package-lint Warnings detected, failing workflow" ; exit 1
           fi
           if grep ' with checkdoc ' output.log | grep -q . ; then
             echo "Checkdoc warning detected, failing workflow" ; exit 1

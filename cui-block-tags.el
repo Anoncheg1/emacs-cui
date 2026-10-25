@@ -747,14 +747,14 @@ Returns nil if LINE-NUM is out of range."
 ;; -=-= help functions: find targets of Links and get content
 
 (defun cui-block-tags--path-is-current-buffer-p (path)
-  "Return non-nil if PATH references the file currently visited by this buffer.
-Handles symlinks, remote files (TRAMP), and buffers without files."
-  ;; (cui--debug "cui-block-tags--path-is-current-buffer-p" buffer-file-name path)
-  (when buffer-file-name
-    (ignore-errors
-      (let ((buffer-file (file-truename buffer-file-name))
-            (input-file  (file-truename (expand-file-name path))))
-        (string= buffer-file input-file)))))
+  "Return non-nil if PATH names the file visited by this buffer.
+Nil for no buffer file, non-string/empty PATH, a directory, a
+nonexistent path or buffer file, or any environmental `file-error'."
+  (when (and buffer-file-name (stringp path))
+    (condition-case nil
+        (and (not (file-directory-p path))
+             (file-equal-p buffer-file-name path))
+      (file-error nil))))
 
 
 (defun cui-block-tags--get-content-at-point-not-org (&optional cui-block-markers)
@@ -939,7 +939,7 @@ Return string or nil"
 
 
 ;; (featurep 'org-links)
-(when (locate-library "org-links")
+54(when (locate-library "org-links")
   (declare-function org-links--local-get-target-position-for-link "org-links"))
 
 ;; (when (require 'org-links nil 'noerror)

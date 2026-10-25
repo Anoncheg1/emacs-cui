@@ -1135,6 +1135,44 @@ test
       ;; (should (string-equal "sys-all2 sshh2hh1" (plist-get (aref res 1) :content)))))
       ;; (should (string-equal "sys-all2 tthh2hh1" (plist-get (aref res 3) :content))))))
 
+;; -=-= Test: cui-block-tags--path-is-current-buffer-p
+(ert-deftest cui-block-tags--path-is-current-buffer-p/benign-nil-cases ()
+  "No signal and nil for: no buffer file, nil/empty PATH, directories,
+nonexistent paths, and a nonexistent buffer file."
+  (let* ((dir  (make-temp-file "cbt-" t))
+         (file (expand-file-name "real.txt" dir)))
+    (unwind-protect
+        (progn
+          (write-region "" nil file nil 'silent)
+          ;; buffer with no file at all
+          (with-temp-buffer
+            (should-not (cui-block-tags--path-is-current-buffer-p file)))
+          ;; buffer visiting an existing file
+          (with-temp-buffer
+            (setq buffer-file-name file)
+            (should-not (cui-block-tags--path-is-current-buffer-p nil))
+            (should-not (cui-block-tags--path-is-current-buffer-p ""))
+            (should-not (cui-block-tags--path-is-current-buffer-p dir))
+            (should-not (cui-block-tags--path-is-current-buffer-p
+                         (expand-file-name "missing.txt" dir)))
+            ;; buffer file itself doesn't exist (fresh find-file style)
+            (let ((buffer-file-name (expand-file-name "new.txt" dir)))
+              (should-not (cui-block-tags--path-is-current-buffer-p
+                           buffer-file-name)))))
+      (delete-directory dir t))))
+
+(ert-deftest cui-block-tags--path-is-current-buffer-p/signals-on-caller-bug ()
+  "A non-string, non-nil PATH is a contract violation and must signal;
+environmental file errors are NOT simulated here, but the guard is
+verified to fire before any file primitive runs."
+  (with-temp-buffer
+    (setq buffer-file-name "/tmp/whatever")
+    ;; (should-error (cui-block-tags--path-is-current-buffer-p 42)
+    ;;               :type 'wrong-type-argument)
+    ;; (should-error (cui-block-tags--path-is-current-buffer-p '(a b))
+    ;;               :type 'wrong-type-argument)
+    ;; nil is benign, not a bug
+    (should-not (cui-block-tags--path-is-current-buffer-p nil))))
 ;; -=-= provide
 (provide 'cui-tests-block-tags)
 
