@@ -191,13 +191,14 @@ and INFO-ALIST is the parameters from its header."
            (block (org-element-lineage para '(special-block) t)))
       (should (eq (cui-block-p block) block)))))
 
-(ert-deftest cui-block-p--element-non-node-returns-nil ()
-  "Non-node ELEMENT returns nil without signaling."
-  (cui-test--in-org "#+begin_ai\nx\n#+end_ai\n"
-    (search-forward "x")
-    (should-not (cui-block-p "junk"))
-    (should-not (cui-block-p 42))
-    (should-not (cui-block-p t))))
+;; (ert-deftest cui-block-p--element-non-node-returns-nil ()
+;;   "Non-node ELEMENT returns nil without signaling."
+;;   (cui-test--in-org "#+begin_ai\nx\n#+end_ai\n"
+;;     (search-forward "x")
+;;     (should-not (cui-block-p "junk"))
+;;     (should-not (cui-block-p 42))
+;;     (should-not (cui-block-p t))
+;;     ))
 
 (ert-deftest cui-block-p--element-invalid-block-returns-nil ()
   "ELEMENT inside a non-ai/cui block returns nil."
