@@ -179,7 +179,9 @@ and INFO-ALIST is the parameters from its header."
     (search-forward "x")
     (let ((node (org-element-at-point)))
       (should (eq (org-element-type node) 'paragraph))
-      (let ((block (cui-block-p node)))
+      (let ((block (cui-block-p node))) ;nil
+        (should-not block))
+      (let ((block (cui-block-p node t))) ;nil
         (should (eq (org-element-type block) 'special-block))
         (should (equal (org-element-property :type block) "ai"))))))
 
@@ -189,16 +191,17 @@ and INFO-ALIST is the parameters from its header."
     (search-forward "x")
     (let* ((para  (org-element-at-point))
            (block (org-element-lineage para '(special-block) t)))
+      ;; (cui-block-p block)))
       (should (eq (cui-block-p block) block)))))
 
-;; (ert-deftest cui-block-p--element-non-node-returns-nil ()
-;;   "Non-node ELEMENT returns nil without signaling."
-;;   (cui-test--in-org "#+begin_ai\nx\n#+end_ai\n"
-;;     (search-forward "x")
-;;     (should-not (cui-block-p "junk"))
-;;     (should-not (cui-block-p 42))
-;;     (should-not (cui-block-p t))
-;;     ))
+(ert-deftest cui-block-p--element-non-node-returns-nil ()
+  "Non-node ELEMENT returns nil without signaling."
+  (cui-test--in-org "#+begin_ai\nx\n#+end_ai\n"
+    (search-forward "x")
+    (should-not (cui-block-p "junk"))
+    (should-not (cui-block-p 42))
+    (should-not (cui-block-p t))
+    ))
 
 (ert-deftest cui-block-p--element-invalid-block-returns-nil ()
   "ELEMENT inside a non-ai/cui block returns nil."

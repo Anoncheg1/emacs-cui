@@ -113,7 +113,8 @@ Arguments
 - HEADER-MARKER is a result of `cui-block-get-header-marker' function
  for cui block.
 - NOWEB-CONTROL SYS-PROMPT MAX-TOKENS, explained in
- `cui-restapi-request-prepare' function."
+ `cui-restapi-request-prepare' function.
+This function may modify the match data."
   (let* ((messages (with-current-buffer (marker-buffer header-marker)
                      ;; get messages vector
                      (cui-block-tags-get-content-ai-messages (cui-block-element-by-marker header-marker)

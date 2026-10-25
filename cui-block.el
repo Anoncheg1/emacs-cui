@@ -248,15 +248,26 @@ You can customize this font with `set-face-attribute'."
 
 ;; -=-= fn: block-p, element-by-marker
 
-(defun cui-block-p (&optional element)
+(defun cui-block--type-p (node)
+  "Return non-nil if NODE is a special block of type \"ai\" or \"cui\"."
+  (and (consp node)                                             ; reject nil/string/t start
+       (eq (org-element-type node) 'special-block)              ; only special blocks qualify
+       (let ((type (org-element-property :type node)))          ; nil :type -> invalid block
+         (and (stringp type)                                    ; :type could be nil/symbol
+              (member (downcase type) '("ai" "cui"))))))        ; case-insensitive type match
+
+
+(defun cui-block-at-point (&optional element)
   "Return nearest enclosing `ai' or `cui' special block, or nil.
 A block is valid when its :type is \"ai\" or \"cui\" (case-insensitive).
 If optional ELEMENT is provided, use it as the starting node for lineage
 resolution; otherwise start from point.
-Return the valid special-block element list, or nil otherwise."
+Return the valid special-block element list, or nil otherwise.
+
+This function may modify the match data."
   (catch 'cui-block                                             ; early exit on first match
     (let ((node (let ((start (or element                            ; ELEMENT wins over point context
-                                (org-element-at-point))))           ; at-point may be nil (non-Org/bob)
+                                 (org-element-at-point))))           ; at-point may be nil (non-Org/bob)
                   (and (consp start) start))))                      ; reject nil/string/t start
       (while node                                                   ; manual parent walk: read :parent only
         (when (and (eq (org-element-type node) 'special-block)      ; nearest enclosing or self
@@ -266,6 +277,20 @@ Return the valid special-block element list, or nil otherwise."
           (throw 'cui-block node))                                  ; matched: bail out immediately
         (setq node (org-element-property :parent node)))            ; pure :parent lookup, cache-safe
       nil)))                                                        ; no match anywhere up the chain
+
+
+(defun cui-block-p (&optional element find-parent)
+  "Return ELEMENT if ELEMENT is a valid `ai'/`cui' special block.
+With FIND-PARENT non-nil, instead find the nearest enclosing one.
+Without ELEMENT, resolve from point.
+
+This function may modify the match data."
+  (if (and element (null find-parent))
+      (when (cui-block--type-p element)   ; check element itself
+        element)
+    (cui-block-at-point element)))       ; walk up from element or point
+
+
 ;; -=-= info - get-info, get-request-type, get-sys
 (defun cui-block-get-info (&optional element no-eval)
   "Parse the header of cui block.

@@ -210,7 +210,8 @@ Optional argument FIRST-CHAT-ROLE may be used to change default \='user
 When NOT-MERGE is not-nil, don't merge messages after reading.
 Description for DEFAULT-SYSTEM-PROMPT SEPARATOR
  at `cui-block-msgs--prepare-chat-messages'.
-Return vector of plist messages with :role and :content."
+Return vector of plist messages with :role and :content.
+This function may modify the match data."
   (cui--debug "cui-block-msgs--collect-chat-messages-at-point N1 %s" element)
   (let* ((element (or element (when (derived-mode-p 'org-mode)
                                 (cui-block-p))))

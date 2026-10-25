@@ -453,7 +453,8 @@ Optional argument CUI-BLOCK-MARKERS is a list of header markers created
  also used in `cui-block-tags-replace'.
 MAX-TOKENS-STRING is string.
 Return vector with messages for cui block, or string if REQ-TYPE is
- compeltion or nil if loop."
+ compeltion or nil if loop.
+This function may modify the match data."
   (cui--debug "cui-block-tags-get-content-ai-messages N1 %s %s %s" noweb-control links-only-last not-clear-properties cui-block-markers)
   (let ((current-block-marker (cui-block-get-header-marker element)))
     (unless (member current-block-marker cui-block-markers)
@@ -551,7 +552,8 @@ If LINKS-ONLY-LAST is not-nil, links expansion will be made for last
 Called from `cui-expand-block', goint to use it everywhere.
 REQ-TYPE SYS-PROMPT MAX-TOKENS
  arguments documented in `cui-restapi-request-prepare'.
-Return string with expanded content."
+Return string with expanded content.
+This function may modify the match data."
   (cui--debug "cui-block-tags-get-content N1 %s" cui-block-markers)
   (when-let* ((element (or element (cui-block-p) (cui-block-tags--block-at-point))))
     ;; (let (
@@ -650,19 +652,21 @@ Return full content of block or nil."
   (cui--debug "cui-block-tags--get-content-org-block-at-point %s" inner cui-block-markers)
   (let ((element (or element (cui-block-tags--block-at-point))))
     (when element
-      ;; (cui--debug "cui-block-tags--get-content-org-block-at-point3 %s" tags-control)
-      (let ((ct (cui-block-tags-get-content-main element nil nil nil cui-block-markers)) ; may cause recursion
-            (lang (if (eq (org-element-type element) 'src-block)
-                      (org-element-property :language element)
-                    ;; else
-                    (when (cui-block-p element)
-                      "ai")))
-            (header (let ((name (org-element-property :name element))) ; nil or string
-                      (when name (concat "Block name: " name)))))
-        (if (and (string-equal-ignore-case "ai" lang) (not inner))
-            ct
-          ;; else
-          (cui-block--compose-m-block ct :lang lang :header header))))))
+      (let ((type (org-element-type element)))
+        ;; (cui--debug "cui-block-tags--get-content-org-block-at-point3 %s" tags-control)
+        (let ((ct (cui-block-tags-get-content-main element nil nil nil cui-block-markers)) ; may cause recursion
+              (lang (if (eq type 'src-block)
+                        (org-element-property :language element)
+                      ;; else
+                      (when (and (eq type 'special-block)
+                                 (cui-block-p element)) ; check that they are equal
+                        "ai")))
+              (header (let ((name (org-element-property :name element))) ; nil or string
+                        (when name (concat "Block name: " name)))))
+          (if (and (string-equal-ignore-case "ai" lang) (not inner))
+              ct
+            ;; else
+            (cui-block--compose-m-block ct :lang lang :header header)))))))
 
 ;; [[file:~/sources/emacs-cui/cui-block-tags.el::735::((and (member type cui-block-tags-org-blocks-types)]]
 
