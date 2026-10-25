@@ -939,7 +939,7 @@ Return string or nil"
 
 
 ;; (featurep 'org-links)
-(declare-function org-links--local-get-target-position-for-link "org-links")
+(declare-function org-links--local-get-target-position-for-link "org-links" nil t)
 
 ;; (when (require 'org-links nil 'noerror)
 (defun cui-block-tags--get-org-links-content (link &optional cui-block-markers)

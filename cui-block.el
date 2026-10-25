@@ -248,24 +248,6 @@ You can customize this font with `set-face-attribute'."
 
 ;; -=-= fn: block-p, element-by-marker
 
-;; (defun cui-block-p (&optional element)
-;;   "Return nearest enclosing `ai' or `cui' special block, or nil.
-;; A block is valid when its :type is \"ai\" or \"cui\" (case-insensitive).
-;; If optional ELEMENT is provided, validate it.
-;; Return the valid special-block element list, or nil otherwise."
-;;   ;; (save-match-data
-;;   (let* ((context (and (null element) (org-element-at-point)))   ; skip point lookup when validating ELEMENT
-;;          (candidate
-;;           (or element                                              ; ELEMENT wins over point context
-;;               (and context                                         ; at-point may be nil (non-Org/bob)
-;;                    (org-element-lineage context '(special-block) t)))) ; nearest enclosing or self
-;;          (type (and (consp candidate)                              ; reject non-node ELEMENT (string, t...)
-;;                     (eq (org-element-type candidate) 'special-block) ; lineage filters, ELEMENT may not
-;;                     (org-element-property :type candidate))))       ; nil :type -> invalid block
-;;     (when (and (stringp type)                                      ; :type could be nil/symbol
-;;                (member (downcase type) '("ai" "cui")))             ; case-insensitive type match
-;;       candidate)))
-
 (defun cui-block-p (&optional element)
   "Return nearest enclosing `ai' or `cui' special block, or nil.
 A block is valid when its :type is \"ai\" or \"cui\" (case-insensitive).
