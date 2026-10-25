@@ -247,39 +247,42 @@ You can customize this font with `set-face-attribute'."
   :group 'cui)
 
 ;; -=-= fn: block-p, element-by-marker
-;; `org-element-with-disabled-cache' is not available pre `org-mode' 9.6.6, i.e.
-;; emacs 28 does not ship with it
-;; (defmacro cui-block--org-element-with-disabled-cache (&rest body)
-;;   "Run BODY without active org-element-cache."
-;;   (declare (debug (form body)) (indent 0))
-;;   `(cl-letf (((symbol-function #'org-element--cache-active-p) (lambda (&rest _) nil)))
-;;      ,@body))
 
+;; (defun cui-block-p (&optional element)
+;;   "Return nearest enclosing `ai' or `cui' special block, or nil.
+;; A block is valid when its :type is \"ai\" or \"cui\" (case-insensitive).
+;; If optional ELEMENT is provided, validate it.
+;; Return the valid special-block element list, or nil otherwise."
+;;   ;; (save-match-data
+;;   (let* ((context (and (null element) (org-element-at-point)))   ; skip point lookup when validating ELEMENT
+;;          (candidate
+;;           (or element                                              ; ELEMENT wins over point context
+;;               (and context                                         ; at-point may be nil (non-Org/bob)
+;;                    (org-element-lineage context '(special-block) t)))) ; nearest enclosing or self
+;;          (type (and (consp candidate)                              ; reject non-node ELEMENT (string, t...)
+;;                     (eq (org-element-type candidate) 'special-block) ; lineage filters, ELEMENT may not
+;;                     (org-element-property :type candidate))))       ; nil :type -> invalid block
+;;     (when (and (stringp type)                                      ; :type could be nil/symbol
+;;                (member (downcase type) '("ai" "cui")))             ; case-insensitive type match
+;;       candidate)))
 
 (defun cui-block-p (&optional element)
-  "Check if point at cui block or ELEMENT is cui block if provided.
-Optional argument ELEMENT is returned by `org-element-at-point', when
- non-nil, checked if it is cui block, if not nil is retuned.
-If ELEMENT is not provider, current position in buffer used to get ai
- block.
-Raise error if ELEMENT is not cui block or there is no cui block at
- current position.
-Like `org-in-src-block-p'.
-Return element or nil."
-  (if (and element
-           (or (string-equal "ai" (org-element-property :type element))
-               (string-equal "cui" (org-element-property :type element))))
-      element
-    ;; else
-    ;; (cui-block--org-element-with-disabled-cache ;; with cache enabled we get weird Cached element is incorrect warnings
-    ;; (let* ((org-element-use-cache nil)
-    (org-element-with-disabled-cache
-      (let ((sel (org-element-lineage
-                  (save-match-data (org-element-context)) (list 'special-block) t)))
-        (when (and sel (or (string-equal "ai" (org-element-property :type sel))
-                           (string-equal "cui" (org-element-property :type sel))))
-          sel)))))
-
+  "Return nearest enclosing `ai' or `cui' special block, or nil.
+A block is valid when its :type is \"ai\" or \"cui\" (case-insensitive).
+If optional ELEMENT is provided, use it as the starting node for lineage
+resolution; otherwise start from point.
+Return the valid special-block element list, or nil otherwise."
+  (let* ((start (or element                                      ; ELEMENT wins over point context
+                    (org-element-at-point)))                     ; at-point may be nil (non-Org/bob)
+         (candidate
+          (and start                                             ; nil start -> no lineage walk
+               (org-element-lineage start '(special-block) t)))  ; nearest enclosing or self
+         (type (and (consp candidate)                            ; reject non-node start (string, t...)
+                    (eq (org-element-type candidate) 'special-block) ; lineage filters, but guard anyway
+                    (org-element-property :type candidate))))    ; nil :type -> invalid block
+    (when (and (stringp type)                                    ; :type could be nil/symbol
+               (member (downcase type) '("ai" "cui")))           ; case-insensitive type match
+      candidate)))
 
 ;; -=-= info - get-info, get-request-type, get-sys
 (defun cui-block-get-info (&optional element no-eval)
@@ -741,7 +744,7 @@ on the current line.
 
 ;; -=-= Markdown - block - compose
 ;; cui-block-tags--compose-m-block
-(cl-defun cui-block--compose-m-block (content &optional &key lang header inner)
+(cl-defun cui-block--compose-m-block (content &optional &key lang header)
   "Surround CONTENT string in markdown block with HEADER string.
 Surrounded markdown block have LANG or \"auto\".
 Markdown blocks in CONTENT are escaped.
@@ -750,33 +753,25 @@ Optional arguments:
 - LANG is a language of content, it is used in header.
 - HEADER is a line above markdown to describe it for LLM, should not have
  new line characters at edges.
-- INNER if non-nil AI language content should be wrapped in
- markdown block, HEADER is ignored
 - HEADER added after first chat prefix or just at the begining if
  CONTENT dont starts with chat prefix.
 To detect LANG use `cui-block-tags--filepath-to-language'.
-- INNER, is used for special case to insert cui block without wrapping.
-Return string."
-  (cui--debug "cui-block--compose-m-block N1 inner=%s lang=%s header=%s" inner lang header)
+Return string or nil if content is empty."
+  (cui--debug "cui-block--compose-m-block N1 lang=%s header=%s" lang header)
   (cui--debug "cui-block--compose-m-block N2" content)
-  ;; trivial case
-  (if (or (not content)
-          (string-empty-p content))
-      nil
-    ;; else - special, not wrap in markdown block.
-    (if (and lang (string-equal-ignore-case "ai" lang) (not inner))
-        content
-      ;; else
-      (let ((content (when content
-                       (concat "\n```" (or lang "auto") "\n"
-                               ;; replace
-                               (string-replace "```" "\\`\\`\\`"
-                                               (replace-regexp-in-string cui-block--chat-prefixes-re
-                                                                         "_\\&"
-                                                                         content))
-                               "\n```"))))
-        (cui--debug "cui-block--compose-m-block N3" content)
-      (concat (when header (concat "\n" header)) content))))) ; no error if content is nil
+  (when (and content
+             (not (string-empty-p content)))
+    (let ((content (concat "\n```" (or lang "auto") "\n"
+                           ;; replace
+                           (string-replace "```" "\\`\\`\\`"
+                                           (replace-regexp-in-string cui-block--chat-prefixes-re
+                                                                     "_\\&"
+                                                                     content))
+                           "\n```")))
+      (cui--debug "cui-block--compose-m-block N3" content)
+      (concat (when  header ; (not (string-equal-ignore-case lang "ai")))
+                (concat "\n" header))
+              content))))
 
 
 ;; -=-= Markdown - block - fix indentation

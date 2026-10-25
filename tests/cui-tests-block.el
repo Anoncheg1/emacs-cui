@@ -120,6 +120,92 @@ and INFO-ALIST is the parameters from its header."
       (should (eq (org-element-type element) 'special-block))
       (should (equal (org-element-property :type element) "ai")))))
 
+;; -=-= Test for `cui-block-p`
+
+(defmacro cui-test--in-org (contents &rest body)
+  "Run BODY in a temp Org buffer with CONTENTS, point at beginning."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (org-mode)
+     (insert ,contents)
+     (goto-char (point-min))
+     ,@body))
+
+(defmacro cui-test--in-org (contents &rest body)
+  "Run BODY in a temp Org buffer with CONTENTS, point at beginning."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (org-mode)
+     (insert ,contents)
+     (goto-char (point-min))
+     ,@body))
+
+(ert-deftest cui-block-p--at-point-inside-ai ()
+  "Point inside an ai block returns that block."
+  (cui-test--in-org "#+begin_ai\nprompt\n#+end_ai\n"
+    (search-forward "prompt")
+    (let ((block (cui-block-p)))
+      (should (eq (org-element-type block) 'special-block))
+      (should (equal (org-element-property :type block) "ai")))))
+
+(ert-deftest cui-block-p--at-point-inside-cui-case-insensitive ()
+  "Case-insensitive :type match for cui."
+  (cui-test--in-org "#+begin_CUI\nx\n#+end_CUI\n"
+    (search-forward "x")
+    (should (equal (org-element-property :type (cui-block-p)) "CUI"))))
+
+(ert-deftest cui-block-p--at-point-nested-picks-nearest ()
+  "Nearest enclosing ai/cui block is returned when nested."
+  (cui-test--in-org
+      "#+begin_ai\n#+begin_cui\ninner\n#+end_cui\n#+end_ai\n"
+    (search-forward "inner")
+    (should (equal (org-element-property :type (cui-block-p)) "cui"))))
+
+(ert-deftest cui-block-p--at-point-rejects-invalid-blocks ()
+  "Non-ai/cui block, src-block, and point outside any block return nil."
+  (cui-test--in-org "#+begin_note\nx\n#+end_note\n"
+    (search-forward "x")
+    (should-not (cui-block-p)))
+  (cui-test--in-org "#+begin_src elisp\nx\n#+end_src\n"
+    (search-forward "x")
+    (should-not (cui-block-p)))
+  (cui-test--in-org "plain\n\n#+begin_ai\nx\n#+end_ai\n"
+    (goto-char (point-min))
+    (should-not (cui-block-p))))
+
+(ert-deftest cui-block-p--element-resolves-lineage ()
+  "ELEMENT is used as starting node; lineage resolves to enclosing block."
+  (cui-test--in-org "#+begin_ai\nx\n#+end_ai\n"
+    (search-forward "x")
+    (let ((node (org-element-at-point)))
+      (should (eq (org-element-type node) 'paragraph))
+      (let ((block (cui-block-p node)))
+        (should (eq (org-element-type block) 'special-block))
+        (should (equal (org-element-property :type block) "ai"))))))
+
+(ert-deftest cui-block-p--element-block-itself ()
+  "Passing the special-block node itself returns it."
+  (cui-test--in-org "#+begin_ai\nx\n#+end_ai\n"
+    (search-forward "x")
+    (let* ((para  (org-element-at-point))
+           (block (org-element-lineage para '(special-block) t)))
+      (should (eq (cui-block-p block) block)))))
+
+(ert-deftest cui-block-p--element-non-node-returns-nil ()
+  "Non-node ELEMENT returns nil without signaling."
+  (cui-test--in-org "#+begin_ai\nx\n#+end_ai\n"
+    (search-forward "x")
+    (should-not (cui-block-p "junk"))
+    (should-not (cui-block-p 42))
+    (should-not (cui-block-p t))))
+
+(ert-deftest cui-block-p--element-invalid-block-returns-nil ()
+  "ELEMENT inside a non-ai/cui block returns nil."
+  (cui-test--in-org "#+begin_note\nx\n#+end_note\n"
+    (search-forward "x")
+    (should-not (cui-block-p (org-element-at-point)))))
+
+
 ;; -=-= Test for `cui-block--let-params-macro'
 (ert-deftest cui-tests-block--let-params-all-from-info-test1 ()
   "Test when all parameters are provided in the block header (info alist)."
@@ -1164,23 +1250,27 @@ This version avoids rectangles and uses only text-based branches and nodes. This
   ;; (should (equal (cui-block--find-next-prev-region 1 15 nil) nil)))
 )
 ;; -=-= Test: `cui-block--compose-m-block'
-(ert-deftest cui-tests-block-tags--compose-m-block ()
+(ert-deftest cui-tests-block--compose-m-block ()
+  (should (not (cui-block--compose-m-block nil :lang "bbb" :header "ccc")))
   (should
    (string-equal (cui-block--compose-m-block "aaa" :lang "bbb" :header "ccc") "\nccc\n```bbb\naaa\n```"))
-  ;; Header are ignored for cui block
   (should
-   (string-equal (cui-block--compose-m-block "asda\n[me:] asdas" :lang "ai" :header "some header") "asda\n[me:] asdas"))
+   (string-equal (cui-block--compose-m-block "asda\nvv[me:] asdas" :lang "ai" :header "some header")
+                 "\nsome header\n```ai\nasda\nvv[me:] asdas\n```"))
   (should
-   (string-equal (cui-block--compose-m-block "[me:] asda\n[ai:] asdas" :lang "ai" :header "some header") "[me:] asda\n[ai:] asdas"))
+   (string-equal (cui-block--compose-m-block "asda\n[me:] asdas" :lang "ai" :header "some header") "\nsome header\n```ai\nasda\n_[me:] asdas\n```"))
   (should
-   (string-equal (cui-block--compose-m-block "Text\nasdas" :lang "ai" :header "Header:")
-                 "Text\nasdas"))
+   (string-equal (cui-block--compose-m-block "[me:] asda\n[ai:] asdas" :lang "ai" :header "some header") "\nsome header\n```ai\n_[me:] asda\n_[ai:] asdas\n```"))
   (should
-   (string-equal (cui-block--compose-m-block "Text\nasdas" :lang "ai" :header "Header:" :inner t)
-                 "\nHeader:\n```ai\nText\nasdas\n```"))
-  (should (equal (cui-block--compose-m-block nil :lang "ai" :inner t) nil))
-  (should (equal (cui-block--compose-m-block nil :lang "ai" :inner nil) nil))
-  (should (equal (cui-block--compose-m-block nil :lang nil :inner t) nil)))
+   (string-equal (cui-block--compose-m-block "```\nText\nasdas\n```" :lang "ai" :header "Header:")
+                 "\nHeader:\n```ai\n\\`\\`\\`\nText\nasdas\n\\`\\`\\`\n```"))
+  ;; (should
+  ;;  (string-equal (cui-block--compose-m-block "Text\nasdas" :lang "ai" :header "Header:" :inner t)
+  ;;                "\nHeader:\n```ai\nText\nasdas\n```"))
+  ;; (should (equal (cui-block--compose-m-block nil :lang "ai" :inner t) nil))
+  ;; (should (equal (cui-block--compose-m-block nil :lang "ai" :inner nil) nil))
+  ;; (should (equal (cui-block--compose-m-block nil :lang nil :inner t) nil))
+  )
 
 ;; -=-= Test: `cui-block--indentation-dedent-string'
 (ert-deftest cui-block--indentation-dedent-string-tests ()

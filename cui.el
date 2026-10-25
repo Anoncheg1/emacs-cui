@@ -197,22 +197,24 @@
                                         :chat		#'cui-request
                                         :completion	#'cui-request ; calls `cui-restapi-request-prepare' from cui-restapi.el
                                         :chain		#'cui-request-chain) ; calls `cui-prompt-request-chain' from cui-prompt.el
-  "Custom variants to execute request.
-If you specify :chain at block parameters line, associated function will
- be called.  See `cui-call-block' and `cui-restapi-request-prepare' for
- parameters."
+  "Custom variants for executing requests.
+If you specify :chain on a block's parameters line, the associated
+function will be called.  See `cui-call-block' and
+`cui-restapi-request-prepare' for parameters."
   :type '(plist :key-type symbol
                 :value-type function
                 :tag "Property list (symbol => funcion)")
   :group 'cui)
 
 (defcustom cui-before-send-hook nil
-  "For changing last message in buffer before preparing and sending.
-Run before request preparation before splitting cui block to chat messages.
-Accept two arguemnts - begin positions of the last message.
-In current buffer:
-- begin - markger at begining of the line with message prefix.
-- end - marker at the end of the last line of message."
+  "For changing the last message in the buffer before preparing and sending.
+Run before request preparation and before splitting the CUI block into
+ chat messages.
+Accept two arguments: the begin and end positions of the last message.
+In the current buffer:
+- BEGIN: marker right after the prefix of the first line of the message.
+- END: marker at the beginning of the next line after the last line of
+ the message."
   :type 'hook
   :group 'cui)
 

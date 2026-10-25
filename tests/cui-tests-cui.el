@@ -186,8 +186,7 @@ asd2
 (ert-deftest cui--expand-block-deep-ai () ; for masking chat prefixes
   (let ((tmpfile (make-temp-file "masking-chat-prefix" nil ".ai")))
     (with-temp-file tmpfile
-      (insert "test\n\n[ai]:\nblabla\n\n[ME]: vv")
-      )
+      (insert "test\n\n[ai]:\nblabla\n\n[ME]: vv"))
 
     (with-temp-buffer
       (org-mode)
@@ -196,8 +195,9 @@ asd2
         (insert "\n#+end_ai")
         (goto-char p1))
       (insert (concat "[[" tmpfile "]]"))
-      ;; (print (buffer-substring-no-properties (point-min) (point-max))))
+      ;; (print (buffer-substring-no-properties (point-min) (point-max)))))
       (let ((cui-restapi-con-token "token"))
+        ;; (print (cui-expand-block-deep)))))
         (should (= 4 (length (cdr (car (nth 2 (cui-expand-block-deep))))))))
       (delete-file tmpfile))))
 ;; -=-= provide

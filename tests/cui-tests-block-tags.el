@@ -349,9 +349,6 @@ asdas
 ;;         (set-buffer-modified-p nil))))
 
 
-
-
-
 ;; -=-= Test: get-replacement-for-org-file-link-in-other-file
 (when (require 'org-links nil 'noerror)
   (ert-deftest cui-tests-block-tags--get-replacement-for-org-file-link-in-other-file ()
