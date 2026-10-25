@@ -248,44 +248,24 @@ You can customize this font with `set-face-attribute'."
 
 ;; -=-= fn: block-p, element-by-marker
 
-;; (defun cui-block-p (&optional element)
-;;   "Return nearest enclosing `ai' or `cui' special block, or nil.
-;; A block is valid when its :type is \"ai\" or \"cui\" (case-insensitive).
-;; If optional ELEMENT is provided, use it as the starting node for lineage
-;; resolution; otherwise start from point.
-;; Return the valid special-block element list, or nil otherwise."
-;;   (let* ((start (or element                                      ; ELEMENT wins over point context
-;;                     (org-element-at-point)))                     ; at-point may be nil (non-Org/bob)
-;;          (candidate
-;;           (and start                                             ; nil start -> no lineage walk
-;;                (org-element-lineage start '(special-block) t)))  ; nearest enclosing or self
-;;          (type (and (consp candidate)                            ; reject non-node start (string, t...)
-;;                     (eq (org-element-type candidate) 'special-block) ; lineage filters, but guard anyway
-;;                     (org-element-property :type candidate))))    ; nil :type -> invalid block
-;;     (when (and (stringp type)                                    ; :type could be nil/symbol
-;;                (member (downcase type) '("ai" "cui")))           ; case-insensitive type match
-;;       candidate)))
-
 (defun cui-block-p (&optional element)
   "Return nearest enclosing `ai' or `cui' special block, or nil.
 A block is valid when its :type is \"ai\" or \"cui\" (case-insensitive).
 If optional ELEMENT is provided, use it as the starting node for lineage
 resolution; otherwise start from point.
 Return the valid special-block element list, or nil otherwise."
-  (let* ((start (or element                                      ; ELEMENT wins over point context
-                    (org-element-at-point)))                     ; at-point may be nil (non-Org/bob)
-         (node (and (consp start) start))                        ; reject nil/string/t start
-         (candidate nil))
-    ;; Manual parent walk: read :parent only, never re-parent, never touch cache.
-    (while (and node (not candidate))
-      (when (and (eq (org-element-type node) 'special-block)     ; nearest enclosing or self
-                 (let ((type (org-element-property :type node))) ; nil :type -> invalid block
-                   (and (stringp type)                           ; :type could be nil/symbol
-                        (member (downcase type) '("ai" "cui"))))) ; case-insensitive type match
-        (setq candidate node))
-      (setq node (org-element-property :parent node)))           ; pure :parent lookup, cache-safe
-    candidate))
-
+  (catch 'cui-block                                             ; early exit on first match
+    (let ((node (let ((start (or element                            ; ELEMENT wins over point context
+                                (org-element-at-point))))           ; at-point may be nil (non-Org/bob)
+                  (and (consp start) start))))                      ; reject nil/string/t start
+      (while node                                                   ; manual parent walk: read :parent only
+        (when (and (eq (org-element-type node) 'special-block)      ; nearest enclosing or self
+                   (let ((type (org-element-property :type node)))  ; nil :type -> invalid block
+                     (and (stringp type)                            ; :type could be nil/symbol
+                          (member (downcase type) '("ai" "cui"))))) ; case-insensitive type match
+          (throw 'cui-block node))                                  ; matched: bail out immediately
+        (setq node (org-element-property :parent node)))            ; pure :parent lookup, cache-safe
+      nil)))                                                        ; no match anywhere up the chain
 ;; -=-= info - get-info, get-request-type, get-sys
 (defun cui-block-get-info (&optional element no-eval)
   "Parse the header of cui block.
