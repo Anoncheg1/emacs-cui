@@ -131,15 +131,6 @@ and INFO-ALIST is the parameters from its header."
      (goto-char (point-min))
      ,@body))
 
-(defmacro cui-test--in-org (contents &rest body)
-  "Run BODY in a temp Org buffer with CONTENTS, point at beginning."
-  (declare (indent 1))
-  `(with-temp-buffer
-     (org-mode)
-     (insert ,contents)
-     (goto-char (point-min))
-     ,@body))
-
 (ert-deftest cui-block-p--at-point-inside-ai ()
   "Point inside an ai block returns that block."
   (cui-test--in-org "#+begin_ai\nprompt\n#+end_ai\n"

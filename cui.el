@@ -320,7 +320,7 @@ Return string or vector."
          (last-end-m (make-marker)))
     (set-marker last-beg-m last-beg)
     (set-marker last-end-m last-end)
-    (run-hook-with-args 'cui-before-send-hook last-beg last-end)
+    (run-hook-with-args 'cui-before-send-hook last-beg-m last-end-m)
     (set-marker last-beg-m nil)
     (set-marker last-end-m nil))
 

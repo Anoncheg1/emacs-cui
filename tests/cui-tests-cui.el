@@ -161,7 +161,7 @@ asd2
              (expected (nth 2 case))
              (result (apply 'cui-debug--safe-format fmt args)))
         (should (equal result expected))))))
-;; -=-= Test cui--expand-block-deep-masking-chat
+;; -=-= Test: cui--expand-block-deep-masking-chat
 (ert-deftest cui--expand-block-deep-masking-chat () ; for masking chat prefixes
   (let ((tmpfile (make-temp-file "masking-chat-prefix" nil ".org")))
     (with-temp-file tmpfile
@@ -200,6 +200,38 @@ asd2
         ;; (print (cui-expand-block-deep)))))
         (should (= 4 (length (cdr (car (nth 2 (cui-expand-block-deep))))))))
       (delete-file tmpfile))))
+;; -=-= Test: cui-before-send-hook
+(ert-deftest cui-test-ctrl-c-ctrl-c-before-send-hook ()
+  "Test that `cui-before-send-hook' receives BEG and END markers
+matching the last CUI message, and that stopping via the hook
+prevents `cui-ctrl-c-ctrl-c' from sending."
+  (with-temp-buffer
+     (org-mode)
+     (insert "#+begin_ai\n[sys:]hello world\n [ME:] hello world2\n_[ME:] hello world2\n#+end_ai\n")
+     (goto-char (point-min))
+
+     (let (received-beg received-end hook-ran)
+       (let ((cui-before-send-hook
+              (list (lambda (beg end)
+                      (setq hook-ran t
+                            received-beg beg
+                            received-end end)
+                      (print (list "here1" hook-ran received-beg received-end))
+                      ;; Stop execution of the rest of the send chain.
+                      (throw 'cui-ctrl-c-ctrl-c--halt nil)))))
+         ;; Guard against an implementation that signals instead of
+         ;; returning when the hook stops the chain.
+         (condition-case nil
+             (catch 'cui-ctrl-c-ctrl-c--halt
+               (cui-ctrl-c-ctrl-c))
+           (error nil)))
+       ;; (print (list "here" hook-ran received-beg received-end))
+       (should hook-ran)
+       (should (markerp received-beg))
+       (should (markerp received-end))
+       (should (= (marker-position received-beg) 37))
+       (should (= (marker-position received-end) 70))
+       )))
 ;; -=-= provide
 (provide 'cui-tests-cui)
 
