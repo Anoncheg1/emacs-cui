@@ -216,7 +216,7 @@ prevents `cui-ctrl-c-ctrl-c' from sending."
                       (setq hook-ran t
                             received-beg beg
                             received-end end)
-                      (print (list "here1" hook-ran received-beg received-end))
+                      ;; (print (list "here1" hook-ran received-beg received-end))
                       ;; Stop execution of the rest of the send chain.
                       (throw 'cui-ctrl-c-ctrl-c--halt nil)))))
          ;; Guard against an implementation that signals instead of

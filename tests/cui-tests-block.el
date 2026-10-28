@@ -1246,18 +1246,27 @@ This version avoids rectangles and uses only text-based branches and nodes. This
 )
 ;; -=-= Test: `cui-block--compose-m-block'
 (ert-deftest cui-tests-block--compose-m-block ()
-  (should (not (cui-block--compose-m-block nil :lang "bbb" :header "ccc")))
+  (should (not (cui-block--compose-m-block nil  "bbb"  "ccc")))
+  (should (not (cui-block--compose-m-block nil  nil "ccc")))
+  (should (not (cui-block--compose-m-block nil  "bbb" nil)))
   (should
-   (string-equal (cui-block--compose-m-block "aaa" :lang "bbb" :header "ccc") "\nccc\n```bbb\naaa\n```"))
+   (string-equal (cui-block--compose-m-block "aaa"  "bbb"  "ccc") "\nccc\n```bbb\naaa\n```"))
   (should
-   (string-equal (cui-block--compose-m-block "asda\nvv[me:] asdas" :lang "ai" :header "some header")
+   (string-equal (cui-block--compose-m-block "aaa"  nil  "ccc") "\nccc\n```auto\naaa\n```"))
+  (should
+   (string-equal (cui-block--compose-m-block "aaa"  "bbb"  nil) "\n```bbb\naaa\n```"))
+  ;; check indentation removal
+  (should
+   (string-equal (cui-block--compose-m-block "  aaa\n vvv" nil nil) "\n```auto\n aaa\nvvv\n```"))
+  (should
+   (string-equal (cui-block--compose-m-block "asda\nvv[me:] asdas"  "ai"  "some header")
                  "\nsome header\n```ai\nasda\nvv[me:] asdas\n```"))
   (should
-   (string-equal (cui-block--compose-m-block "asda\n[me:] asdas" :lang "ai" :header "some header") "\nsome header\n```ai\nasda\n_[me:] asdas\n```"))
+   (string-equal (cui-block--compose-m-block "asda\n[me:] asdas"  "ai"  "some header") "\nsome header\n```ai\nasda\n_[me:] asdas\n```"))
   (should
-   (string-equal (cui-block--compose-m-block "[me:] asda\n[ai:] asdas" :lang "ai" :header "some header") "\nsome header\n```ai\n_[me:] asda\n_[ai:] asdas\n```"))
+   (string-equal (cui-block--compose-m-block "[me:] asda\n[ai:] asdas"  "ai"  "some header") "\nsome header\n```ai\n_[me:] asda\n_[ai:] asdas\n```"))
   (should
-   (string-equal (cui-block--compose-m-block "```\nText\nasdas\n```" :lang "ai" :header "Header:")
+   (string-equal (cui-block--compose-m-block "```\nText\nasdas\n```"  "ai"  "Header:")
                  "\nHeader:\n```ai\n\\`\\`\\`\nText\nasdas\n\\`\\`\\`\n```"))
   ;; (should
   ;;  (string-equal (cui-block--compose-m-block "Text\nasdas" :lang "ai" :header "Header:" :inner t)

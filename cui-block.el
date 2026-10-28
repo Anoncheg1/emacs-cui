@@ -257,7 +257,7 @@ You can customize this font with `set-face-attribute'."
               (member (downcase type) '("ai" "cui"))))))        ; case-insensitive type match
 
 
-(defun cui-block-at-point (&optional element)
+(defun cui-block--at-point (&optional element)
   "Return nearest enclosing `ai' or `cui' special block, or nil.
 A block is valid when its :type is \"ai\" or \"cui\" (case-insensitive).
 If optional ELEMENT is provided, use it as the starting node for lineage
@@ -280,15 +280,18 @@ This function may modify the match data."
 
 
 (defun cui-block-p (&optional element find-parent)
-  "Return ELEMENT if ELEMENT is a valid `ai'/`cui' special block.
-With FIND-PARENT non-nil, instead find the nearest enclosing one.
-Without ELEMENT, resolve from point.
+  "Get at point or check ELEMENT if it is a cui block.
+With FIND-PARENT non-nil and ELEMENT, return the nearest enclosing cui
+ block for ELEMENT.
+Without ELEMENT, resolve from point in current buffer.
+Return a valid `ai'/`cui' `org-mode' special block.
 
 This function may modify the match data."
   (if (and element (null find-parent))
       (when (cui-block--type-p element)   ; check element itself
         element)
-    (cui-block-at-point element)))       ; walk up from element or point
+    ;; else - element is nil or find-parent
+    (cui-block--at-point element)))       ; walk up from element or point
 
 
 ;; -=-= info - get-info, get-request-type, get-sys
@@ -749,38 +752,6 @@ on the current line.
       (cui-block--markdown-quotes-at-line-p pos "```")))
 
 
-;; -=-= Markdown - block - compose
-;; cui-block-tags--compose-m-block
-(cl-defun cui-block--compose-m-block (content &optional &key lang header)
-  "Surround CONTENT string in markdown block with HEADER string.
-Surrounded markdown block have LANG or \"auto\".
-Markdown blocks in CONTENT are escaped.
-
-Optional arguments:
-- LANG is a language of content, it is used in header.
-- HEADER is a line above markdown to describe it for LLM, should not have
- new line characters at edges.
-- HEADER added after first chat prefix or just at the begining if
- CONTENT dont starts with chat prefix.
-To detect LANG use `cui-block-tags--filepath-to-language'.
-Return string or nil if content is empty."
-  (cui--debug "cui-block--compose-m-block N1 lang=%s header=%s" lang header)
-  (cui--debug "cui-block--compose-m-block N2" content)
-  (when (and content
-             (not (string-empty-p content)))
-    (let ((content (concat "\n```" (or lang "auto") "\n"
-                           ;; replace
-                           (string-replace "```" "\\`\\`\\`"
-                                           (replace-regexp-in-string cui-block--chat-prefixes-re
-                                                                     "_\\&"
-                                                                     content))
-                           "\n```")))
-      (cui--debug "cui-block--compose-m-block N3" content)
-      (concat (when  header ; (not (string-equal-ignore-case lang "ai")))
-                (concat "\n" header))
-              content))))
-
-
 ;; -=-= Markdown - block - fix indentation
 
 (defun cui-block--indentation-dedent-string (text)
@@ -835,6 +806,39 @@ Modify current buffer."
                          (min (+ (point) min-indent) (line-end-position)))
           (forward-line 1)
           (setq n (1- n)))))))
+
+
+
+;; -=-= Markdown - block - compose
+;; cui-block-tags--compose-m-block
+(defun cui-block--compose-m-block (content &optional lang header)
+  "Surround CONTENT string in markdown block with HEADER string.
+Surrounded markdown block have LANG or \"auto\".
+Markdown blocks in CONTENT are escaped.
+
+Optional arguments:
+- LANG is a language of content, it is used in header.
+- HEADER is a line above markdown to describe it for LLM, should not have
+ new line characters at edges.
+- HEADER added after first chat prefix or just at the begining if
+ CONTENT dont starts with chat prefix.
+To detect LANG use `cui-block-tags--filepath-to-language'.
+Return string or nil if content is empty."
+  (cui--debug "cui-block--compose-m-block N1 lang=%s header=%s" lang header)
+  (cui--debug "cui-block--compose-m-block N2" content)
+  (when (and content
+             (not (string-empty-p content)))
+    (let ((content (concat "\n```" (or lang "auto") "\n"
+                           ;; replace
+                           (string-replace "```" "\\`\\`\\`"
+                                           (replace-regexp-in-string cui-block--chat-prefixes-re
+                                                                     "_\\&"
+                                                                     (cui-block--indentation-dedent-string content)))
+                           "\n```")))
+      (cui--debug "cui-block--compose-m-block N3" content)
+      (concat (when  header ; (not (string-equal-ignore-case lang "ai")))
+                (concat "\n" header))
+              content))))
 
 
 ;; -=-= Markdown - headers folding, end of current

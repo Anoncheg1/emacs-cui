@@ -393,7 +393,7 @@ Return string or nil or raise user-error."
                      (or path-to-display
                          (file-name-nondirectory (directory-file-name path-string)))
                      "\":")))
-    (cui-block--compose-m-block content :lang lang :header header)))))
+    (cui-block--compose-m-block content lang header)))))
     ;; (cui-block-tags--compose-block-for-path-content (or path-to-display
     ;;                                                     (file-name-nondirectory (directory-file-name path-string))) ; name of file or last directory
     ;;                                                     ;; (file-name-nondirectory path-string)) ; put only name of file
@@ -652,21 +652,19 @@ Return full content of block or nil."
   (cui--debug "cui-block-tags--get-content-org-block-at-point %s" inner cui-block-markers)
   (let ((element (or element (cui-block-tags--block-at-point))))
     (when element
-      (let ((type (org-element-type element)))
         ;; (cui--debug "cui-block-tags--get-content-org-block-at-point3 %s" tags-control)
         (let ((ct (cui-block-tags-get-content-main element nil nil nil cui-block-markers)) ; may cause recursion
-              (lang (if (eq type 'src-block)
+              (lang (if (eq (org-element-type element) 'src-block)
                         (org-element-property :language element)
                       ;; else
-                      (when (and (eq type 'special-block)
-                                 (cui-block-p element)) ; check that they are equal
+                      (when (cui-block--type-p element) ; check that they are equal
                         "ai")))
               (header (let ((name (org-element-property :name element))) ; nil or string
                         (when name (concat "Block name: " name)))))
           (if (and (string-equal-ignore-case "ai" lang) (not inner))
               ct
             ;; else
-            (cui-block--compose-m-block ct :lang lang :header header)))))))
+            (cui-block--compose-m-block ct lang header))))))
 
 ;; [[file:~/sources/emacs-cui/cui-block-tags.el::735::((and (member type cui-block-tags-org-blocks-types)]]
 
@@ -787,7 +785,7 @@ Return string or nil."
                                                      (forward-line -1)
                                                      (line-end-position))))
           (lang (cui-block-tags--filepath-to-language major-mode)))
-    (cui-block--compose-m-block ct :lang lang :header "Function:")))
+    (cui-block--compose-m-block ct lang "Function:")))
    ;; 2) outline
    ((and (or (derived-mode-p 'outline-mode) ; major
              (symbol-value (intern-soft outline-minor-mode))) ; minor
@@ -801,7 +799,7 @@ Return string or nil."
                                        (line-end-position))
                        (point-max)))) ; return position or nil
       (let ((ct (buffer-substring-no-properties beg-pos end-pos)))
-        (cui-block--compose-m-block ct :lang (cui-block-tags--filepath-to-language major-mode) :header "Outliner:"))))
+        (cui-block--compose-m-block ct (cui-block-tags--filepath-to-language major-mode) "Outliner:"))))
 
    ;; 3) ai file
    ((and (string-equal "ai" (cui-block-tags--filepath-to-language (buffer-file-name)))
@@ -895,7 +893,7 @@ Return string or nil."
                (save-excursion (cui-block-tags--get-m-block-at-point))
              (cui--debug "cui-block-tags--get-content-at-point-org (2) case"))))
      ;; - (3) case - at chat message prefix
-     ((and (cui-block-p element)
+     ((and (cui-block-p element t)
            (unwind-protect
                (cui-block-tags--get-content-chat-message-at-point cui-block-markers)
              (cui--debug "cui-block-tags--get-content-at-point-org (3) case"))))
@@ -972,7 +970,7 @@ Return string or nil."
                                          buffer-file-name)
                                     major-mode)))
                       (cui--debug "cui-block-tags--get-org-links-content N3 %s %s" pos1 pos2)
-                      (cui-block--compose-m-block content :lang (cui-block-tags--filepath-to-language lang)))
+                      (cui-block--compose-m-block content (cui-block-tags--filepath-to-language lang)))
                   ;; pos1 is nil
                   (user-error "In link %s of NUM-NUM format was not possible to find first NUM in buffer %s" link (current-buffer))))
             ;; else - 1) Case1: only num1, num2 is nil - get object at num1 or just line.
@@ -1281,7 +1279,7 @@ or vector if content have links to images."
         (if-let* ((bt (or (cui-block-tags--get-backtrace-buffer-string)
                           (user-error "No backtrace buffer for @Backtrace tag"))) ; *Backtrace* buffer exist
                   (bt (cui-block-tags--take-n-lines bt cui-block-tags-backtrace-max-lines))
-                  (bt (cui-block--compose-m-block bt :lang "backtrace")) ; prepare string
+                  (bt (cui-block--compose-m-block bt "backtrace")) ; prepare string
                   (new-string (cui-block-tags--replace-last-regex-smart string cui-block-tags--regexes-backtrace bt))) ; insert backtrace
             (setq string new-string)))))
 
