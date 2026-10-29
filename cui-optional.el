@@ -154,7 +154,8 @@ non-word characters (whitespace, punctuation, quotes, ...).
 Character at POS not checked.
 A word is a run of non-whitespace, non-punctuation, non-quote chars,
 except `#' which counts as a word character."
-  (let ((sep "^[:alnum:]#_")   ; matches separators (non-word chars)
+  (let (
+        ;; (sep "^[:alnum:]#_")   ; matches separators (non-word chars)
         (word "[:alnum:]#_"))  ; matches word chars
     (list
      (save-excursion
@@ -188,9 +189,7 @@ Return `en-dash', `em-dash', or nil for no change."
                   (skip-chars-backward "[:blank:]" (line-beginning-position))
                   (bolp))
           (cond
-           ((and l-space r-space
-
-                 ) 'em-dash) ; sentences separator
+           ((and l-space r-space) 'em-dash) ; sentences separator
            ((and l r (not l-space) (not r-space) ; not spaces
                  (or (and (cl-digit-char-p l) (cl-digit-char-p r))
                      ;; 2) check by two words before and after hyphen
@@ -242,22 +241,22 @@ Arguments BEG END described in`cui-before-send-hook' hook."
             ;; both should not be at the begining of line or with just spaces before them. (maybe not needed to chech)
             (pcase (cui-optional--classify-hyphen pos)
               ('en-dash (push (cons pos ?–) changes))
-              ('em-dash (push (cons pos ?—) changes)))
-            )))
+              ('em-dash (push (cons pos ?—) changes))))))
       ;; Pass 2: apply from the end so earlier positions stay valid.
       (dolist (c (sort changes (lambda (a b) (> (car a) (car b)))))
         (goto-char (car c))
         (delete-char 1)
         (insert-char (cdr c) 1)))))
 
-(let ((reg (cui-block--chat-the-last-region (cui-block-p))))
-    (let ((last-beg-m (make-marker))
-          (last-end-m (make-marker)))
-      (set-marker last-beg-m (car reg)) ; after perfix
-      (set-marker last-end-m (cdr reg))
-      (run-hook-with-args 'cui-before-send-hook last-beg-m last-end-m) ; run cui-optional-markdown-blocks-correct-dashes-hook-function
-      (set-marker last-beg-m nil)
-      (set-marker last-end-m nil)))
+;; To Test:
+;; (let ((reg (cui-block--chat-the-last-region (cui-block-p))))
+;;     (let ((last-beg-m (make-marker))
+;;           (last-end-m (make-marker)))
+;;       (set-marker last-beg-m (car reg)) ; after perfix
+;;       (set-marker last-end-m (cdr reg))
+;;       (run-hook-with-args 'cui-before-send-hook last-beg-m last-end-m) ; run cui-optional-markdown-blocks-correct-dashes-hook-function
+;;       (set-marker last-beg-m nil)
+;;       (set-marker last-end-m nil)))
 
 ;; -=-= Org TAB key: Markdown folding
 

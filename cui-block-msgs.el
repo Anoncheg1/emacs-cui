@@ -214,7 +214,7 @@ Return vector of plist messages with :role and :content.
 This function may modify the match data."
   (cui--debug "cui-block-msgs--collect-chat-messages-at-point N1 %s" element)
   (let* ((element (or element (when (derived-mode-p 'org-mode)
-                                (cui-block--))))
+                                (cui-block-p element t))))
          (content-start (if element (org-element-property :contents-begin element)
                           ;; else
                           (point-min)))
