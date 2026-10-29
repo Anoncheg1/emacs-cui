@@ -587,7 +587,8 @@ Execution in not `org-mode' is supported.
 Wrap `cui-block--markdown-block-p' to work with Org blocks, not only ai
  block.
 Return cons with begining of lines for markdown block header and footer
- or nil."
+ or nil.
+Modify the match data."
   ;; check that we are in Org block
   (save-excursion
     (let* ((region (if (derived-mode-p 'org-mode)

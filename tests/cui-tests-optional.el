@@ -109,7 +109,6 @@
         (nth 4 res) "** Something Importent2")))))
 
 
-
 ;; -=-= For `cui-optional-markdown-cycle'
 
 (ert-deftest cui-tests-optional--markdown-cycle ()
@@ -152,7 +151,115 @@
    ;; (buffer-substring-no-properties (point-min) (point-max))
    )))
 
+;; -=-= For `cui-optional--hex-expression-p'
+(ert-deftest cui-optional-tests--hex-expression-p ()
+  (let (res
+        (tests (list
+                ;; --- should be t ---
+                (cui-optional--hex-expression-p "0x1F")       ; C-style
+                (cui-optional--hex-expression-p "0Xdead")     ; uppercase prefix
+                (cui-optional--hex-expression-p "0x0")        ; zero is valid
+                (cui-optional--hex-expression-p "#x1F")       ; Elisp #x
+                (cui-optional--hex-expression-p "#XCAFE")     ; uppercase #X
+                (cui-optional--hex-expression-p "#16rFF")     ; radix syntax
+                (cui-optional--hex-expression-p "#2r1010")    ; any radix is accepted by `read`
+                (cui-optional--hex-expression-p "-0x10")      ; signed
+                (cui-optional--hex-expression-p "+0xFF")      ; signed
+                ;; --- should be nil ---
+                (cui-optional--hex-expression-p "")           ; empty
+                (cui-optional--hex-expression-p "0x")         ; no digits
+                (cui-optional--hex-expression-p "0xGG")       ; G not hex
+                (cui-optional--hex-expression-p "0xFF foo")   ; trailing junk
+                (cui-optional--hex-expression-p "foo 0xFF")   ; leading junk
+                (cui-optional--hex-expression-p "0xFF\n")     ; trailing newline (not consumed)
+                (cui-optional--hex-expression-p "hello")      ; symbol, not integer
+                (cui-optional--hex-expression-p "\"0xFF\"")   ; string literal, not integer
+                (cui-optional--hex-expression-p nil))))         ; non-string input
+    (dolist (case tests)
+      (push (not (null case)) res))
+    ;; (print (reverse res)))
+    (should (equal (reverse res) '(t t t t t t t t t nil nil nil nil nil nil nil nil nil)))))
 
+
+;; -=-= For `cui-optional--words-around'
+(ert-deftest cui-optional-tests--words-around ()
+  (should (equal
+           (with-temp-buffer (insert "0x1F-0x1F")  (cui-optional--words-around 5)) ; ("0x1F" "0x1F")
+           '("0x1F" "0x1F")))
+
+  (should (equal(with-temp-buffer (insert "#XCAFE-#2r1010")  (cui-optional--words-around 7))
+                '("#XCAFE" "#2r1010")))
+  (should (equal(with-temp-buffer (insert "\"abc-def\"s")    (cui-optional--words-around 5)) ; ("abc" "def")
+                '("abc" "def")))
+  (should (equal(with-temp-buffer (insert ")abc-def\n")    (cui-optional--words-around 5)) ; ("abc" "def")
+                '("abc" "def")))
+  (should (equal(with-temp-buffer (insert ")abc-\ndef\n")    (cui-optional--words-around 5)) ; ("abc" nil)
+                '("abc" nil)))
+  (should (equal(with-temp-buffer (insert "abc\n-def\n")    (cui-optional--words-around 5))
+                '(nil "def")))
+  (should (equal(with-temp-buffer (insert "-abc-def-")  (cui-optional--words-around 1)) ; (nil "abc")
+                '(nil "abc")))
+  (should (equal(with-temp-buffer (insert "abc")        (cui-optional--words-around 1)) ; (nil "bc") ; we dont check current character
+                '(nil "bc")))
+  (should (equal(with-temp-buffer (insert "")           (cui-optional--words-around 1)) ; (nil nil)
+                '(nil nil))))
+
+;; -=-= For `cui-optional--classify-hyphen'
+(ert-deftest cui-optional-tests--classify-hyphen ()
+  (should (eq
+           (with-temp-buffer (insert "0x1F-0x1F")  (cui-optional--classify-hyphen 5)) ; en-dash
+           'en-dash))
+  (should (eq
+           (with-temp-buffer (insert "0x1F -0x1F")  (cui-optional--classify-hyphen 6)) ; nil
+           nil))
+  (should (eq
+           (with-temp-buffer (insert "0x1F - 0x1F")  (cui-optional--classify-hyphen 6)) ; 'em-dash
+           'em-dash))
+  (should (eq
+           (with-temp-buffer (insert "0x1F - ")  (cui-optional--classify-hyphen 6)) ; 'em-dash
+           'em-dash))
+  (should (eq
+           (with-temp-buffer (insert " - 0x1F")  (cui-optional--classify-hyphen 2)) ; nil
+           nil)))
+
+;; -=-= For `cui-optional-markdown-blocks-correct-dashes-hook-function'
+(ert-deftest cui-correct-dashes-en-dash-test ()
+  "A single hyphen between two chars becomes an en-dash."
+  (with-temp-buffer
+    (insert "pages 10-20 here")
+    (cui-optional-markdown-blocks-correct-dashes-hook-function (point-min) (point-max))
+    (should (string= (buffer-string) "pages 10–20 here"))))
+
+(ert-deftest cui-correct-dashes-em-dash-test ()
+  "A hyphen surrounded by spaces becomes an em-dash."
+  (with-temp-buffer
+    (insert "wait - what happened")
+    (cui-optional-markdown-blocks-correct-dashes-hook-function (point-min) (point-max))
+    (should (string= (buffer-string) "wait — what happened"))))
+
+(ert-deftest cui-correct-dashes-multiple-test ()
+  "Multiple hyphens in one region are all corrected."
+  (with-temp-buffer
+    (insert "see 1-3 and 5-9 - ok")
+    (cui-optional-markdown-blocks-correct-dashes-hook-function (point-min) (point-max))
+    (should (string= (buffer-string) "see 1–3 and 5–9 — ok"))))
+
+(ert-deftest cui-correct-dashes-multiple-test2 ()
+  "Multiple hyphens in one region are all corrected."
+  (with-temp-buffer
+    (insert "see 1-3 and 5-9 - \nok")
+    (cui-optional-markdown-blocks-correct-dashes-hook-function (point-min) (point-max))
+    (should (string= (buffer-string) "see 1–3 and 5–9 — \nok"))))
+
+(ert-deftest cui-correct-dashes-multiple-test3 ()
+  "Multiple hyphens in one region are all corrected."
+  (with-temp-buffer
+    (insert "see 1\n- 3 and 5-9 - \nok")
+    (cui-optional-markdown-blocks-correct-dashes-hook-function (point-min) (point-max))
+    ;; (print (buffer-string)))
+    (should (string= (buffer-string) "see 1\n- 3 and 5–9 — \nok"))))
+
+;; -=-= end
 (provide 'cui-tests-optional)
 
 ;;; cui-tests-optional.el ends here

@@ -208,8 +208,8 @@ function will be called.  See `cui-call-block' and
 
 (defcustom cui-before-send-hook nil
   "For changing the last message in the buffer before preparing and sending.
-Run before request preparation and before splitting the CUI block into
- chat messages.
+Run before request preparation and before splitting current CUI block
+ into chat messages.
 Accept two arguments: the begin and end positions of the last message.
 In the current buffer:
 - BEGIN: marker right after the prefix of the first line of the message.
@@ -313,16 +313,14 @@ MAX-TOKENS is integer limit for LLM output.
 Note: Works in current buffer only.
 Return string or vector."
   ;; hook
-  (let* ((reg (cui-block--chat-the-last-region element))
-         (last-beg (car reg)) ; after perfix
-         (last-end (cdr reg))
-         (last-beg-m (make-marker))
-         (last-end-m (make-marker)))
-    (set-marker last-beg-m last-beg)
-    (set-marker last-end-m last-end)
-    (run-hook-with-args 'cui-before-send-hook last-beg-m last-end-m)
-    (set-marker last-beg-m nil)
-    (set-marker last-end-m nil))
+  (let ((reg (cui-block--chat-the-last-region element)))
+    (let ((last-beg-m (make-marker))
+          (last-end-m (make-marker)))
+      (set-marker last-beg-m (car reg)) ; after perfix
+      (set-marker last-end-m (cdr reg))
+      (run-hook-with-args 'cui-before-send-hook last-beg-m last-end-m)
+      (set-marker last-beg-m nil)
+      (set-marker last-end-m nil)))
 
   ;; main
   (if (eql req-type 'completion) ; old

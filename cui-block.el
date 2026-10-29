@@ -623,7 +623,8 @@ Optional argument LIM-BEG is cui block begining position.
 Return t if pos in markdown block, table or quote.
 Side-effect: set pointer position to POS.
 If Optional argument DONT-CHECK-TABLES is not-nil disable checking if
-pos at Org table."
+pos at Org table.
+Modifies the match data."
   (goto-char pos)
   (prog1
       ;; not quoted, in tables
@@ -641,9 +642,10 @@ pos at Org table."
   "Return position of markdown subblocks begining and ending headers.
 Execution in not `org-mode' is supported.
 BEG and END is a range in which to search markdown.
-Careful, move pointer.
 Positions in list are begining of lines with ```.
-Return list of integers or nil."
+Return list of integers or nil.
+
+Move pointer and modify the match data."
   (goto-char beg)
   (let (regions markdown-beg)
     (while (and (< (point) end)
@@ -666,18 +668,22 @@ Return list of integers or nil."
       (reverse regions))))
 
 
-(defun cui-block--markdown-block-p (&optional limit-start limit-end)
+(defun cui-block--markdown-block-p (&optional limit-start limit-end regions)
   "Return (cons beg end) if pos is inside markdown block.
 Execution in not `org-mode' is supported.
-Caution: move pointer at the end of the last markdown subblock footer.
 If POS is not provided current cursor position is used.
 LIMIT-START and LIMIT-END are parameters for
  `cui-block--markdown-block-regions', if not provided cui block
  content region is used or `point-min' and `point-max`.
+If REGIONS parameter is provided it is useed instead of LIMIT-START and
+ LIMIT-END.
 If POS at the footer of block, return nil.
 
 Return (cons beg end), Where beg is bol for markdown block, end is bol
- of next line after markdown block.  If not found return nil."
+ of next line after markdown block.  If not found return nil.
+
+Move pointer at the end of the last markdown subblock footer and modify
+ the match data."
   (cui--debug "cui-block--markdown-block-p N0 %s %s" limit-start limit-end)
   ;; - preparation
   (let ((pos (line-beginning-position))
@@ -691,7 +697,7 @@ Return (cons beg end), Where beg is bol for markdown block, end is bol
           (limit-end (or limit-end (cdr reg))))
       ;; - main
       (cui--debug "cui-block--markdown-block-p N1 %s %s" limit-start limit-end)
-      (when-let* ((regions (cui-block--markdown-block-regions limit-start limit-end))
+      (when-let* ((regions (or regions (cui-block--markdown-block-regions limit-start limit-end)))
                   (res (cui-block--find-region-with-position regions pos)))
         (cui--debug "cui-block--markdown-block-p N10 %s %s %s" (point) regions res)
         (if (zerop (mod (cdr res) 2)) ; we need 0 2 4
@@ -712,7 +718,9 @@ Return (cons beg end), Where beg is bol for markdown block, end is bol
   "For markdown subblock return cons of content start and content ends.
 M-BLOCK-START M-BLOCK-END are line begin position of markdown range with
  header and footer as returned by `cui-block--markdown-block-p',
- `cui-block--markdown-block-regions'.  Caution, move pointer."
+ `cui-block--markdown-block-regions'.
+
+Move pointer."
   (goto-char m-block-end) ; begin of line at ```
   (while (bolp)
     (backward-char))
@@ -726,30 +734,34 @@ M-BLOCK-START M-BLOCK-END are line begin position of markdown range with
 (defun cui-block--markdown-quotes-at-line-p (pos &optional delimiter beg end)
   "Return t if POS is inside any markdown quotes at current line.
 if BEG END not provided, look for DELIMITER at the current line only.
-DELIMITER should be a string (\"`\" or \"```\"), defaults to \"`\"."
-  (save-excursion
-    (let ((delimiter (or delimiter "`"))
-          (bol (or beg
-                   (progn (goto-char pos) (line-beginning-position))))
-          (eol (or end
-                   (progn (goto-char pos) (line-end-position))))
-          (found nil))
-      (goto-char bol)
-      (while (and (search-forward delimiter eol t) (not found))
-        (let ((start (match-beginning 0)))
-          (when (search-forward delimiter eol t)
-            (let ((end (match-end 0)))
-              (when (and (>= pos start)
-                         (< pos end))
-                (setq found t))))))
-      found)))
+DELIMITER should be a string (\"`\" or \"```\"), defaults to \"`\".
+
+Move pointer and modify the match data."
+  (let ((delimiter (or delimiter "`"))
+        (bol (or beg
+                 (progn (goto-char pos) (line-beginning-position))))
+        (eol (or end
+                 (progn (goto-char pos) (line-end-position))))
+        (found nil))
+    (goto-char bol)
+    (while (and (search-forward delimiter eol t) (not found))
+      (let ((start (match-beginning 0)))
+        (when (search-forward delimiter eol t)
+          (let ((end (match-end 0)))
+            (when (and (>= pos start)
+                       (< pos end))
+              (setq found t))))))
+    found))
 
 (defun cui-block--markdown-quotes-p (pos)
   "Return t if POS is inside any markdown backquote block at line.
 on the current line.
-\(`...` or ```...```\) on current line or at quote itself."
-  (or (cui-block--markdown-quotes-at-line-p pos "`")
-      (cui-block--markdown-quotes-at-line-p pos "```")))
+\(`...` or ```...```\) on current line or at quote itself.
+
+Modify the match data."
+  (save-excursion
+    (or (cui-block--markdown-quotes-at-line-p pos "`")
+        (cui-block--markdown-quotes-at-line-p pos "```"))))
 
 
 ;; -=-= Markdown - block - fix indentation
@@ -1135,6 +1147,7 @@ and content end at the beginin and the end of flat list."
   ;; (cui--debug "cui-block--get-chat-messages-positions N2" (buffer-substring-no-properties content-start content-end))
   (save-excursion
     (let ((prefix-re (or prefix-re cui-block--chat-prefixes-re))
+          (regions (cui-block--markdown-block-regions content-start content-end)) ; for speed
           (positions))
       (goto-char content-start)
       ;; Collect all chat header positions
@@ -1143,7 +1156,8 @@ and content end at the beginin and the end of flat list."
         ;; check that we are not in markdown subblock
         (if markdown-check ; if t enable markdown check
             (unless (save-match-data
-                      (cui-block--markdown-block-p content-start content-end))
+                      (save-excursion
+                        (cui-block--markdown-block-p content-start content-end regions)))
               (push (match-beginning 0) positions))
           ;; else
           ;; (print(buffer-substring-no-properties (1- (match-beginning 0)) (match-end 0)))
@@ -1768,13 +1782,14 @@ Executed in `font-lock-defaults' chain."
     (goto-char start) ; in case
     (while (re-search-forward "^[\s-]*|" end t)
       (setq mbeg (match-beginning 0)) ; (prop-match-beginning match))
-      (unless (cui-block--at-special-p mbeg)
-        (end-of-line)
-        (remove-text-properties mbeg (point)
-                                (list 'face))
-        (put-text-property mbeg (point)
-                           'face 'org-table)
-        t))))
+      (save-match-data
+        (unless (cui-block--at-special-p mbeg)
+          (end-of-line)
+          (remove-text-properties mbeg (point)
+                                  (list 'face))
+          (put-text-property mbeg (point)
+                             'face 'org-table)
+          t)))))
 
 (defun cui-block--fontify-markdown-pagesep (start end)
   "Set face and overlay to make page separators more visible, allowing editing.

@@ -150,7 +150,7 @@ or
 
 4) Keep token in *encrypted “auth-source” file*. Full decription will be provided later...
 
-** Optional hooks after receiving answer.
+** Optional: hooks after receiving answer
 This hooks add space “ “ before lines that in cui block that looks like Org header, that fix confustion for Org logic.
 #+begin_src elisp :lexical t :results none :exports code :eval no
 (add-hook 'cui-block-after-chat-insertion-hook #'cui-optional-remove-distant-empty-lines-hook-function)
@@ -161,12 +161,12 @@ This hook remove empty lines if there is too much of them in response.
 (add-hook 'cui-block-after-chat-insertion-hook #'cui-optional-remove-headers-hook-function)
 #+end_src
 
-** Optional hooks before sending request
+** Optional: hooks before sending request
 This hook removes excess indentation from markdown blocks in the last user message, directly in the buffer, before it is prepared and sent.
 #+begin_src elisp :lexical t :results none :exports code :eval no
 (add-hook 'cui-before-send-hook #'cui-optional-markdown-blocks-remove-indentation-hook-function)
 #+end_src
-** Optional Markdown folding
+** Optional: Markdown folding
 We provide ~cui-optional-markdown-cycle~ function same as ~org-cycle~. It allow to fold and unfold markdown headers in cui block.
 
 To set for Org mode, add those lines to your ~/.emacs file:

@@ -41,7 +41,7 @@
 
 ;;; Code:
 
-;; -=-= remove-distant-empty-lines hook - after-receive
+;; -=-= after-receive: remove-distant-empty-lines hook
 (defun cui-optional-remove-distant-empty-lines (beg)
   "Remove excessibe empty lines from BEG to current position.
 Don't remove empty lines that have more than two lines in a row before
@@ -75,7 +75,7 @@ Arguments TYPE CONTENT BEFORE-POS STREAM parameters described in
       ;; else - not stream
       (cui-optional-remove-distant-empty-lines before-pos))))
 
-;; -=-= remove-headers hook - after-receive
+;; -=-= after-receive: remove-headers hook
 (defun cui-add-char-before-org-outline-regexp-bol
     (&optional char re beg end)
   "Insert CHAR before each match of RE between BEG and END.
@@ -104,16 +104,15 @@ Should be added the last to be executed first."
     (cui-add-char-before-org-outline-regexp-bol
      " " org-outline-regexp-bol before-pos (point))))
 
-;; -=-= remove-indentation hook - pre-send
+;; -=-= pre-send: remove-indentation hook
 
-(defun cui-optional-markdown-blocks-remove-indentation-hook-function (beg end)
-  "Remove common indentation from markdown blocks in the last user messagges.
-Arguments BEG END described in
-`cui-before-send-hook' hook."
-  (cui--debug "cui-optional-markdown-blocks-remove-indentation-hook-function N1HOOK: %s %s" beg end)
+(defun cui-optional-markdown-blocks--function (function beg end)
+  "Apply FUNCTION to every markdown block in the last user message.
+Arguments BEG END are described in`cui-before-send-hook' hook."
+  (cui--debug "cui-optional-markdown-blocks--function N1 HOOK: %s %s" beg end)
   (save-excursion
     (let ((bounds (nreverse (cui-block--markdown-block-regions beg end)))) ; from bottom
-      (while bounds
+      (while bounds ; loop
         (let* ((block-end (pop bounds))
                (block-beg (pop bounds))
                ;; Skip the block's opening line (e.g. the ``` fence line).
@@ -124,11 +123,143 @@ Arguments BEG END described in
                (line-end (progn
                            (goto-char block-end)
                            (1- (line-number-at-pos)))))
-          (cui--debug "cui-optional-markdown-blocks-remove-indentation-hook-function N2 HOOK: %s %s" line-beg line-end)
+          (cui--debug "cui-optional-markdown-blocks--function N2 HOOK: %s %s" line-beg line-end)
           (when (> line-end line-beg) ; at least two lines: one body + closing
-            (cui-block--indentation-dedent-lines line-beg line-end)))))))
+            (funcall function line-beg line-end)))))))
 
-;; -=-= Markdown: folding - cycling
+
+(defun cui-optional-markdown-blocks-remove-indentation-hook-function (beg end)
+  "Remove common indentation from markdown blocks in the last user messagges.
+Arguments BEG END described in `cui-before-send-hook' hook."
+  (cui--debug "cui-optional-markdown-blocks-remove-indentation-hook-function N1HOOK: %s %s" beg end)
+  (cui-optional-markdown-blocks--function #'cui-block--indentation-dedent-lines beg end))
+
+;; -=-= pre-send: correct dashes characters chhook
+
+(defun cui-optional--hex-expression-p (str)
+  "Return non-nil if STR is a complete, valid hex integer literal."
+  (and (stringp str)
+       (or (string-match-p "\\`[+-]?\\(?:0[xX]\\|#[x]\\|#[0-9]+[rR]\\)[0-9a-fA-F]+\\'" str)
+       (condition-case nil
+           (let ((reg (read-from-string str)))
+             (and (integerp (car reg))
+                  (= (cdr reg) (length str))))
+         (error nil)))))
+
+
+(defun cui-optional--words-around (pos)
+  "Return (BEFORE AFTER): the two words around POS.
+Words are separated by `-'; the outer edges may be separated by any
+non-word characters (whitespace, punctuation, quotes, ...).
+Character at POS not checked.
+A word is a run of non-whitespace, non-punctuation, non-quote chars,
+except `#' which counts as a word character."
+  (let ((sep "^[:alnum:]#_")   ; matches separators (non-word chars)
+        (word "[:alnum:]#_"))  ; matches word chars
+    (list
+     (save-excursion
+       (goto-char pos)
+       ;; (skip-chars-backward sep)
+       (let ((end (point)))
+         (skip-chars-backward word)
+         (when (< (point) end)
+           (buffer-substring-no-properties (point) end))))
+     (save-excursion
+       (goto-char (1+ pos))
+       ;; (skip-chars-forward sep)
+       (let ((start (point)))
+         (skip-chars-forward word)
+         (when (< start (point))
+           (buffer-substring-no-properties start (point))))))))
+
+
+(defun cui-optional--classify-hyphen (&optional pos)
+  "Classify hyphen at POS.
+Return `en-dash', `em-dash', or nil for no change."
+  ;; 1) check by first character before and after hyphen
+  (let ((pos (or pos (point))))
+    (let ((l (char-before pos))
+          (r (char-after (1+ pos))))
+      (let ((l-space (memq l '(?\s ?\t)))
+            (r-space (memq r '(?\s ?\t))))
+        ;; (print (list l-space r-space)))))
+        (unless (save-excursion
+                  (goto-char pos)
+                  (skip-chars-backward "[:blank:]" (line-beginning-position))
+                  (bolp))
+          (cond
+           ((and l-space r-space
+
+                 ) 'em-dash) ; sentences separator
+           ((and l r (not l-space) (not r-space) ; not spaces
+                 (or (and (cl-digit-char-p l) (cl-digit-char-p r))
+                     ;; 2) check by two words before and after hyphen
+                     (let ((sep "^[:alnum:]#_")   ; matches separators (non-word chars)
+                           (word "[:alnum:]#_"))  ; matches word chars
+                       (let ((before
+                              (save-excursion
+                                (goto-char pos)
+                                (skip-chars-backward sep)
+                                (let ((end (point)))
+                                  (skip-chars-backward word)
+                                  (when (< (point) end)
+                                    (buffer-substring-no-properties (point) end)))))
+                             (after
+                              (save-excursion
+                                (goto-char pos)
+                                (skip-chars-forward sep)
+                                (let ((start (point)))
+                                  (skip-chars-forward word)
+                                  (when (< start (point))
+                                    (buffer-substring-no-properties start (point)))))))
+                         (and before after
+                              (cui-optional--hex-expression-p before)
+                              (cui-optional--hex-expression-p after))))
+                     ;; (and (>= l ?A) (<= l ?Z) (>= r ?A) (<= r ?Z))
+                     ) 'en-dash))))))))
+
+
+(defun cui-optional-markdown-blocks-correct-dashes-hook-function (beg end)
+  "Replace hyphen with em-dash or en-dash in the last user messagges.
+BEG END is last message in current CUI block, where we replace hyphens
+ that satisfly some requirements:
+- (–) en-dash for range and relationships.
+- (—) em-dash to tell that here comes more detail or an aside, it marks
+ a strong break in thought.
+Arguments BEG END described in`cui-before-send-hook' hook."
+  (cui--debug "cui-optional-markdown-blocks-correct-dashes-hook-function N1 HOOK: %s %s" beg end)
+  (save-excursion
+    (let ((regions (cui-block--markdown-block-regions beg end))
+          changes) ; list of (cons pos en-dash/em-dash)
+      ;; Pass 1: collect (pos . replacement) without mutating the buffer.
+      (goto-char beg)
+      (while (re-search-forward "-" end t)
+        (let ((pos (1- (point))))
+          (unless (or (cui-block--markdown-quotes-p (point))
+                      (save-excursion (cui-block--markdown-block-p beg end regions))) ; use regions for speed
+            ;; - en-dash - should be between two characters
+            ;; - em-dash - should be surounded with spaces
+            ;; both should not be at the begining of line or with just spaces before them. (maybe not needed to chech)
+            (pcase (cui-optional--classify-hyphen pos)
+              ('en-dash (push (cons pos ?–) changes))
+              ('em-dash (push (cons pos ?—) changes)))
+            )))
+      ;; Pass 2: apply from the end so earlier positions stay valid.
+      (dolist (c (sort changes (lambda (a b) (> (car a) (car b)))))
+        (goto-char (car c))
+        (delete-char 1)
+        (insert-char (cdr c) 1)))))
+
+(let ((reg (cui-block--chat-the-last-region (cui-block-p))))
+    (let ((last-beg-m (make-marker))
+          (last-end-m (make-marker)))
+      (set-marker last-beg-m (car reg)) ; after perfix
+      (set-marker last-end-m (cdr reg))
+      (run-hook-with-args 'cui-before-send-hook last-beg-m last-end-m) ; run cui-optional-markdown-blocks-correct-dashes-hook-function
+      (set-marker last-beg-m nil)
+      (set-marker last-end-m nil)))
+
+;; -=-= Org TAB key: Markdown folding
 
 ;; 1. Tell Emacs that 'cui-markdown-invisible is an alias for the 'invisible property.
 
