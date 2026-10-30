@@ -214,8 +214,8 @@ prevents `cui-ctrl-c-ctrl-c' from sending."
        (let ((cui-before-send-hook
               (list (lambda (beg end)
                       (setq hook-ran t
-                            received-beg beg
-                            received-end end)
+                            received-beg (copy-marker beg)
+                            received-end (copy-marker end))
                       ;; (print (list "here1" hook-ran received-beg received-end))
                       ;; Stop execution of the rest of the send chain.
                       (throw 'cui-ctrl-c-ctrl-c--halt nil)))))
@@ -225,13 +225,12 @@ prevents `cui-ctrl-c-ctrl-c' from sending."
              (catch 'cui-ctrl-c-ctrl-c--halt
                (cui-ctrl-c-ctrl-c))
            (error nil)))
-       ;; (print (list "here" hook-ran received-beg received-end))
+       ;; (print (list "here" hook-ran received-beg received-end))))
        (should hook-ran)
        (should (markerp received-beg))
        (should (markerp received-end))
        (should (= (marker-position received-beg) 37))
-       (should (= (marker-position received-end) 70))
-       )))
+       (should (= (marker-position received-end) 70)))))
 ;; -=-= provide
 (provide 'cui-tests-cui)
 

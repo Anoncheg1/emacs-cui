@@ -116,6 +116,7 @@
 ;; - Restore buffer state	https://github.com/Anoncheg1/emacs-unmodified-buffer1
 ;; - outline.el usage		https://github.com/Anoncheg1/emacs-outline-it
 ;; - Dates for Org-mode headers	https://github.com/Anoncheg1/emacs-org-history
+;; - Fix tables copied from browser	https://github.com/Anoncheg1/emacs-org-tsv2markdown
 
 ;;;; Donate:
 
@@ -208,6 +209,7 @@ function will be called.  See `cui-call-block' and
 
 (defcustom cui-before-send-hook nil
   "For changing the last message in the buffer before preparing and sending.
+For `cui-request' only.
 Run before request preparation and before splitting current CUI block
  into chat messages.
 Accept two arguments: the begin and end positions of the last message.
@@ -215,6 +217,11 @@ In the current buffer:
 - BEGIN: marker right after the prefix of the first line of the message.
 - END: marker at the beginning of the next line after the last line of
  the message."
+  :type 'hook
+  :group 'cui)
+
+(defcustom cui-before-send-hook-stop-flag t
+  "Non-nil means stop if `cui-before-send-hook' modify last user message."
   :type 'hook
   :group 'cui)
 
@@ -236,11 +243,28 @@ REQ-TYPE symbol is completion or chat mostly.  Set by
   `cui-req-type-functions'."
   (cui--debug "cui-request %s" req-type)
   (seq-let (element noweb-control sys-prompt model max-tokens top-p temperature frequency-penalty presence-penalty service stream _info) (cui-parse-org-header)
-    (let ((content (cui-prepare-messages req-type element noweb-control sys-prompt max-tokens)))
-      (apply #'cui-restapi-request-prepare ; at cui-restapi.el
-             ;; hook - allow you to modify any parameters
-             (cui-block--pipeline-macro (req-type content element model max-tokens top-p temperature frequency-penalty presence-penalty service stream)
-                                        cui-block-msgs-after-prepare-messages-hook)))))
+    ;; hook
+    (catch 'stop ; hook modified message
+      (let ((reg (cui-block--chat-the-last-region element)))
+        (let ((last-beg-m (copy-marker (car reg))) ; after perfix
+              (last-end-m (copy-marker (cdr reg))))
+          (unwind-protect
+              (let ((str (buffer-substring-no-properties  last-beg-m last-end-m))) ; the last user message
+                (run-hook-with-args 'cui-before-send-hook last-beg-m last-end-m)
+                (unless (string-equal str (buffer-substring-no-properties last-beg-m last-end-m))
+                  (when cui-before-send-hook-stop-flag
+                    (funcall cui-restapi-show-error-function "CUI block was modified by hook." (cui-block-get-header-marker element))
+                    (throw 'stop nil))))
+            ;; UNWINDFORMS
+            (set-marker last-beg-m nil)
+            (set-marker last-end-m nil))))
+
+      ;; main
+      (let ((content (cui-prepare-messages req-type element noweb-control sys-prompt max-tokens)))
+        (apply #'cui-restapi-request-prepare ; at cui-restapi.el
+               ;; hook - allow you to modify any parameters
+               (cui-block--pipeline-macro (req-type content element model max-tokens top-p temperature frequency-penalty presence-penalty service stream)
+                                          cui-block-msgs-after-prepare-messages-hook))))))
 
 
 (defun cui-request-chain (req-type)
@@ -301,6 +325,7 @@ Return list values from cui block header or ORG properties set by looking
       (list element noweb-control sys-prompt model max-tokens top-p temperature frequency-penalty presence-penalty service stream ; model params
             info))))
 
+
 (defun cui-prepare-messages (req-type element noweb-control sys-prompt max-tokens)
   "Read content of cui block and prepare it to request.
 REQ-TYPE is a symbol as a key without : from `cui-req-type-functions'.
@@ -312,17 +337,6 @@ SYS-PROMPT is :sys keyword of cui block that will be placed as the first
 MAX-TOKENS is integer limit for LLM output.
 Note: Works in current buffer only.
 Return string or vector."
-  ;; hook
-  (let ((reg (cui-block--chat-the-last-region element)))
-    (let ((last-beg-m (make-marker))
-          (last-end-m (make-marker)))
-      (set-marker last-beg-m (car reg)) ; after perfix
-      (set-marker last-end-m (cdr reg))
-      (run-hook-with-args 'cui-before-send-hook last-beg-m last-end-m)
-      (set-marker last-beg-m nil)
-      (set-marker last-end-m nil)))
-
-  ;; main
   (if (eql req-type 'completion) ; old
       (cui-block-tags-replace (string-trim (cui-block-get-content element))) ; return string
     ;; else - chat - vector
@@ -335,9 +349,10 @@ Return string or vector."
      nil ; disable-tags
      req-type
      (if (and max-tokens cui-restapi-add-max-tokens-recommendation)
-       (concat sys-prompt " "(cui-restapi--get-length-recommendation max-tokens))
+         (concat sys-prompt " "(cui-restapi--get-length-recommendation max-tokens))
        ;; else
        sys-prompt))))
+
 
 ;; -=-= interactive fn: key M-x: cui-expand-block
 (defun cui-expand-block-deep ()
@@ -434,9 +449,6 @@ If `cui-mode' is active and not inside the minibuffer, stop the current
               (call-interactively #'cui-restapi-stop-url-request) ; cui-restapi.el
             (error nil)))))))
 
-;; -=-= interactive fn: M-x cui-toggle-debug
-(defalias 'cui-toggle-debug #'cui-debug-toggle)
-
 ;; -=-= fn: Help function to rebind major mode with chaining
 (defun cui--call-next-remap-protected (command &optional seen)
   "Call the next remapping of COMMAND, skipping any commands already in SEEN.
@@ -451,6 +463,7 @@ If no further remappings found, calls COMMAND interactively if possible."
        ;; Valid binding, try further
        ((commandp binding)
         (cui--call-next-remap-protected command (cons binding seen)))))))
+
 
 (defun cui--call-next-key-remap-protected (key &optional seen)
   "Call the next binding of KEY, skipping handlers already in SEEN.
@@ -663,6 +676,7 @@ ORIG-FUN is `cui--org-babel-get-src-block-info-advice' and its ARGS."
           (cui--org-babel-get-src-block-info no-eval datum)
         ;; else
         (apply orig-fun args)))))
+
 ;; -=-= xref for Markdown blocks
 
 (defun cui-xref-elisp-advice (orig-fun &rest args)
@@ -743,6 +757,7 @@ Used in `cui-open-request-buffer'."
     (when element
       (cui-timers--get-keys-for-variable (cui-block-get-header-marker element)))))
 
+
 (defun cui-open-request-buffer ()
   "Opens the url request buffer for cui block at current position."
   (interactive)
@@ -783,6 +798,9 @@ Used in `cui-open-request-buffer'."
 
 ;; -=-= aliases
 (defalias 'cui-tangle #'org-babel-tangle)
+;; interactive fn: M-x cui-toggle-debug
+(defalias 'cui-toggle-debug #'cui-debug-toggle)
+
 ;; -=-= provide
 (provide 'cui)
 ;;; cui.el ends here
