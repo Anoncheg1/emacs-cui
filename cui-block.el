@@ -826,7 +826,8 @@ Modify current buffer."
 (defun cui-block--compose-m-block (content &optional lang header)
   "Surround CONTENT string in markdown block with HEADER string.
 Surrounded markdown block have LANG or \"auto\".
-Markdown blocks in CONTENT are escaped.
+Markdown blocks and message prefixes in CONTENT are escaped.
+Remove unneded spaces from content.
 
 Optional arguments:
 - LANG is a language of content, it is used in header.
@@ -840,17 +841,24 @@ Return string or nil if content is empty."
   (cui--debug "cui-block--compose-m-block N2" content)
   (when (and content
              (not (string-empty-p content)))
-    (let ((content (concat "\n```" (or lang "auto") "\n"
-                           ;; replace
-                           (string-replace "```" "\\`\\`\\`"
-                                           (replace-regexp-in-string cui-block--chat-prefixes-re
-                                                                     "_\\&"
-                                                                     (cui-block--indentation-dedent-string content)))
-                           "\n```")))
-      (cui--debug "cui-block--compose-m-block N3" content)
-      (concat (when  header ; (not (string-equal-ignore-case lang "ai")))
-                (concat "\n" header))
-              content))))
+    (let* (;; fix indentation
+           (ct (cui-block--indentation-dedent-string content))
+           ;; mask message prefix
+           (ct (replace-regexp-in-string cui-block--chat-prefixes-re
+                                              "_\\&"
+                                              ct))
+           ;; mask inner markdown blocks
+           (ct (string-replace "```" "\\`\\`\\`" ct))
+           ;; wrap in markdown block
+           (ct (concat "\n```" (or lang "auto") "\n"
+                            ct
+                            "\n```"))
+           ;; add header
+           (ct (concat (when  header ; (not (string-equal-ignore-case lang "ai")))
+                         (concat "\n" header))
+                       ct)))
+      (cui--debug "cui-block--compose-m-block N3" ct)
+      ct)))
 
 
 ;; -=-= Markdown - headers folding, end of current
