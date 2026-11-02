@@ -235,6 +235,7 @@ Arguments BEG END described in`cui-before-send-hook' hook."
       (while (re-search-forward "-" end t)
         (let ((pos (1- (point))))
           (unless (or (cui-block--markdown-quotes-p (point))
+                      (org-in-regexp org-link-any-re)
                       (save-excursion (cui-block--markdown-block-p beg end regions))) ; use regions for speed
             ;; - en-dash - should be between two characters
             ;; - em-dash - should be surounded with spaces

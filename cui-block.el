@@ -1602,11 +1602,13 @@ If optional argument ELEMENT is non-nil it is used as cui block."
 ;; -=-= Result
 
 (defun cui-block-insert-result-message (message header-marker)
-  "Insert MESSAGE to #+RESULT of block in buffer of HEADER-MARKER."
+  "Insert MESSAGE to #+RESULT of block in buffer of HEADER-MARKER.
+To get header marker you may use (cui-block-get-header-marker (cui-block-p))."
   (with-current-buffer (marker-buffer header-marker)
     (save-excursion
       (goto-char header-marker)
       (cui-block-insert-result message))))
+;; (cui-block-insert-result-message "as" (cui-block-get-header-marker (cui-block-p)))
 
 (defun cui-block-insert-result (result &optional result-params hash _exec-time)
   "Modified `org-babel-insert-result' function.
@@ -1698,24 +1700,52 @@ For _INFO HASH check `org-babel-where-is-src-block-result' function."
           (point)))))))
 
 
-(defun cui-block-remove-result (&optional info keep-keyword)
-  "Remove the result of the current source block.
+(defun cui-block-remove-result (&optional header-marker info keep-keyword)
+  "Remove the result of the current CUI block.
 INFO argument is currently ignored.
 When KEEP-KEYWORD is non-nil, keep the #+RESULT keyword and just remove
-the rest of the result."
+the rest of the result.
+When HEADER-MARKER is specified, result removed from target block, see
+ `cui-block-insert-result-message'."
   (interactive)
   (let ((location (cui-block-where-is-result nil info))
-	(case-fold-search t))
+        (case-fold-search t))
     (when location
       (save-excursion
         (goto-char location)
-	(when (looking-at org-babel-result-regexp)
-	  (delete-region
-	   (if keep-keyword (line-beginning-position 2)
-	     (save-excursion
-	       (skip-chars-backward " \r\t\n")
-	       (line-beginning-position 2)))
-	   (progn (forward-line) (org-babel-result-end))))))))
+        (when (looking-at org-babel-result-regexp)
+          (delete-region
+           (if keep-keyword (line-beginning-position 2)
+             (save-excursion
+               (skip-chars-backward " \r\t\n")
+               (line-beginning-position 2)))
+           (progn (forward-line) (org-babel-result-end))))))))
+
+
+(defun cui-block-remove-result (&optional header-marker info keep-keyword)
+  "Remove the result of the current CUI block.
+When HEADER-MARKER is non-nil, remove the result of the block it points
+ into (see `cui-block-insert-result-message'); otherwise use the current
+ buffer (INFO is passed to `cui-block-where-is-result' to locate the
+ result).
+When KEEP-KEYWORD is non-nil, keep the #+RESULT keyword and just remove
+ the rest of the result."
+  (interactive)
+  (with-current-buffer (or (and header-marker (marker-buffer header-marker))
+                           (current-buffer))
+    (let ((location (or header-marker
+                       (cui-block-where-is-result nil info)))
+          (case-fold-search t))
+      (when location
+        (save-excursion
+          (goto-char location)
+          (when (looking-at org-babel-result-regexp)
+            (delete-region
+             (if keep-keyword (line-beginning-position 2)
+               (save-excursion
+                 (skip-chars-backward " \r\t\n")
+                 (line-beginning-position 2)))
+             (progn (forward-line) (org-babel-result-end)))))))))
 
 
 ;; -=-= Fontify: help functions

@@ -1143,7 +1143,7 @@ nonexistent paths, and a nonexistent buffer file."
          (file (expand-file-name "real.txt" dir)))
     (unwind-protect
         (progn
-          (write-region "" nil file nil 'silent)
+          (write-region " " nil file nil 'silent)
           ;; buffer with no file at all
           (with-temp-buffer
             (should-not (cui-block-tags--path-is-current-buffer-p file)))
@@ -1173,6 +1173,21 @@ verified to fire before any file primitive runs."
     ;;               :type 'wrong-type-argument)
     ;; nil is benign, not a bug
     (should-not (cui-block-tags--path-is-current-buffer-p nil))))
+;; -=-= Test: cui-block-tags--detect-multimodal-pair
+
+;; (let* ((dir  (make-temp-file "emacs-cui-test" t))
+;;        (file (expand-file-name "test.org" dir)))
+;;   (unwind-protect
+;;         (progn
+;;           (write-region "# -*- mode: org -*-\n* asd\nbla" nil file nil 'silent)
+;;           (print file)
+;;           (print (cui-block-tags--filepath-to-language file))
+;;           (print (cui-block-tags--compose-block-for-path-full file))
+;;           (print (cui-block-tags--detect-multimodal-pair file)))
+;;     (delete-directory dir t)))
+
+;; (cui-block-tags--compose-block-for-path-full "/home/g/sources/emacs-cui/CHANGELOG.org​")
+
 ;; -=-= provide
 (provide 'cui-tests-block-tags)
 

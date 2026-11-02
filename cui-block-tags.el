@@ -289,6 +289,7 @@ First check if extension of binary, then by reading FILE itself."
   (unless (and (file-regular-p file)
                (file-readable-p file)
                (> (nth 7 (file-attributes file)) 0)) ; not empy
+    ;; (cui-block-insert-result-message "as" (cui-block-get-header-marker (cui-block-p)))
     (user-error "File %s is not readable or empty.?" file))
   (let ((ext (file-name-extension file)))
     (or (and ext (member-ignore-case  ext cui-block-tags--binary-extensions)) ; simple
@@ -314,6 +315,7 @@ First check if extension of binary, then by reading FILE itself."
 CLASS is \='image or \='audio.  TYPE is the specific format symbol."
   (let* ((ext (file-name-extension file))
          (from-ext (cdr (assoc-string ext cui-block-tags--multimodal-pairs t))))
+    (cui--debug "cui-block-tags--detect-multimodal-pair %s %s" ext from-ext)
     (or from-ext
         (when (and (file-readable-p file) (not (file-directory-p file)))
           (with-temp-buffer
@@ -426,7 +428,7 @@ Start and first line after header, end at of line of the first not empty
  line before footer."
   (when-let* ((element (or element
                            (cui-block-tags--block-at-point))))
-    (if (string-equal "ai" (org-element-property :type element))
+    (if (cui-block--type-p element)
         (cui-block--contents-region element)
       ;; else - not ai org element
       (when-let* ((res (org-src--contents-area element)))
@@ -554,16 +556,16 @@ REQ-TYPE SYS-PROMPT MAX-TOKENS
  arguments documented in `cui-restapi-request-prepare'.
 Return string with expanded content.
 This function may modify the match data."
-  (cui--debug "cui-block-tags-get-content N1 %s" cui-block-markers)
+  (cui--debug "cui-block-tags-get-content-main N1 %s" cui-block-markers element)
   (when-let* ((element (or element (cui-block-p) (cui-block-tags--block-at-point))))
     ;; (let (
     ;;       (max-tokens-string
     ;;        (when (and max-tokens cui-restapi-add-max-tokens-recommendation)
     ;;          (cui-restapi--get-length-recommendation max-tokens)))
     ;;       )
-    (cui--debug "cui-block-tags-get-content N2 %s" element)
+    (cui--debug "cui-block-tags-get-content-main N2 %s" element)
     (cond
-     ((string-equal "ai" (org-element-property :type element))
+     ((cui-block--type-p element)
       (string-trim
        (cui-block-msgs--stringify-chat-messages
         (cui-block-tags-get-content-ai-messages element noweb-control links-only-last not-clear-properties cui-block-markers disable-tags req-type sys-prompt))))
@@ -574,7 +576,7 @@ This function may modify the match data."
        (cui-block-tags-replace (org-babel--expand-body (org-babel-get-src-block-info))))) ; org-babel-execute-src-block
 
      ((member (org-element-type element) cui-block-tags-org-blocks-types)
-      (cui--debug "cui-block-tags-get-content blocks-types")
+      (cui--debug "cui-block-tags-get-content-main blocks-types")
       (cui-block-tags--clear-properties
        (cui-block-tags-replace (caddr (org-src--contents-area element))))))))
 
@@ -1281,7 +1283,7 @@ or vector if content have links to images."
                           (user-error "No backtrace buffer for @Backtrace tag"))) ; *Backtrace* buffer exist
                   (bt (cui-block-tags--take-n-lines bt cui-block-tags-backtrace-max-lines))
                   (bt (cui-block--compose-m-block bt "backtrace")) ; prepare string
-                  (new-string (cui-block-tags--replace-last-regex-smart string cui-block-tags--regexes-backtrace bt))) ; insert backtrace
+                  (new-string (cui-block-tags--replace-last-regex-smart string cui-block-tags--regexes-backtrace bt))) ; insert backtrace, add-text-properties
             (setq string new-string)))))
 
 
@@ -1298,6 +1300,7 @@ or vector if content have links to images."
                   " " ; regex match what space also, so we always add it, to have space before link
                   (cui-block-tags--compose-block-for-path-full tag)
                   "\n")))
+      (add-text-properties 0 (length repl) '(face region) repl) ; side effect function
       (setq string (concat (substring string 0 pos)
                            repl
                            (substring string end)))))
@@ -1317,11 +1320,14 @@ or vector if content have links to images."
            (repl (concat (cui-block-tags--get-replacement-for-org-link
                           link cui-block-markers)
                          "\n")))
+           (add-text-properties 0 (length repl) '(face region) repl) ; side effect function
+      (cui--debug "cui-block-tags-replace N2_1 %s" link)
+      (cui--debug "cui-block-tags-replace N2_2" repl)
       (setq string (concat (substring string 0 pos)
                            repl
                            (substring string end)))))
 
-  (cui--debug "cui-block-tags-replace N5")
+  (cui--debug "cui-block-tags-replace N5" string)
   string) ; return
 
 ;; Usage:

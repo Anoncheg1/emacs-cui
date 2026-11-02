@@ -407,11 +407,14 @@ block was found, otherwise nil."
               (res-str (if arg
                            (pp-to-string (cui-expand-block-deep))
                          ;; - just content with expanded links:
-                         (cui-block-tags-get-content-main element
-                                                          t		; noweb-control
-                                                          nil	; links-only-last
-                                                          t))))	; not-clear-properties
-    (if (called-interactively-p 'any)
+                         (condition-case err (cui-block-tags-get-content-main element
+                                                                              t	; noweb-control
+                                                                              nil	; links-only-last
+                                                                              t)	; not-clear-properties
+                           (user-error (funcall cui-restapi-show-error-function (format "User-Error: %s\n" err) (cui-block-get-header-marker element)) (signal nil))
+                           (error (funcall cui-restapi-show-error-function (format "Error: %s\n" err) (cui-block-get-header-marker element)) nil)))))
+    (if (and (called-interactively-p 'any)
+             res-str)
         (let ((buf (get-buffer-create "*CUI Preview*")))
           (with-help-window buf (with-current-buffer buf
                                   (insert res-str)))

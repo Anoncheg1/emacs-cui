@@ -1495,6 +1495,50 @@ for non-blank lines."
 ;; (my-test-asterisk-filling-robust)
 
 
+;; -=-= Test: `cui-block-remove-result'
+(defconst cui-test--block-with-result
+  "begin_cui emacs-lisp\n(+ 1 2)\nend_cui\n\n#+RESULTS:\n: 3\n"
+  "CUI block with a pre-existing RESULT; usable in plain `org-mode'.")
+
+(ert-deftest cui-block-remove-result/with-header-marker-from-other-buffer ()
+  "Remove result in the marker's buffer, called from another buffer.
+Uses HEADER-MARKER directly, so neither `cui-mode' nor `cui-block-p'
+is needed."
+  (with-temp-buffer
+    (org-mode)
+    (insert cui-test--block-with-result)
+    (let ((target (current-buffer))
+          (header (copy-marker
+                   (save-excursion
+                     (goto-char (point-min))
+                     (search-forward "#+RESULTS:")
+                     (line-beginning-position)))))
+      ;; Call from a different buffer; header-marker resolves the target.
+      (with-temp-buffer
+        (cui-block-remove-result header))
+      (with-current-buffer target
+        (goto-char (point-min))
+        (should-not (re-search-forward "^[ \t]*#\\+RESULTS:" nil t))
+        (should (string-match-p "(\\+ 1 2)" (buffer-string))))
+      (set-marker header nil))))
+
+(ert-deftest cui-block-remove-result/no-marker-current-buffer ()
+  "Remove result in the current buffer when HEADER-MARKER is nil.
+`cui-block-where-is-result' is stubbed so `cui-block-p' (which needs
+CUI mode) is never called."
+  (with-temp-buffer
+    (org-mode)
+    (insert cui-test--block-with-result)
+    (let ((result-pos (save-excursion
+                        (goto-char (point-min))
+                        (search-forward "#+RESULTS:")
+                        (line-beginning-position))))
+      (cl-letf (((symbol-function 'cui-block-where-is-result)
+                 (lambda (&rest _) result-pos)))
+        (cui-block-remove-result nil nil))
+      (goto-char (point-min))
+      (should-not (re-search-forward "^[ \t]*#\\+RESULTS:" nil t))
+      (should (string-match-p "(\\+ 1 2)" (buffer-string))))))
 ;; -=-= provide
 (provide 'cui-tests-block)
 
