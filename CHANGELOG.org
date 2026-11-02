@@ -1,0 +1,91 @@
+# -*- mode: org -*-
+
+* v0.4 [2026-11-02 Mon]
+
+** Functional changes:
+
+- Added ~cui-before-send-hook~ (called from ~cui-request~; sending halts if it modifies the last message) and optional hooks for dedenting markdown blocks and replacing hyphens with en/em-dashes.
+
+- ~cui-block-next-item~ jumps to the next same-level header; ~cui-block-previous-item~ restored.
+
+- Markdown blocks are always dedented at composition.
+
+** Improvements:
+
+- Rewrote ~cui-block-p~ (split into three functions, less cache reliance); simplified related block helpers.
+
+- Robust ~url-retrieve~ handling: closed ports/sockets, timer cleanup, ~C-g~ interrupts, better errors.
+
+- Better ~cui-block-remove-result~; fixed expand-block highlighting, header folding/infinite loops, and ~---~ page-separator highlighting; improved org→markdown conversion and link replacement.
+
+- Removed obsolete ~if-let~/~when-let~ for Emacs 31.1; fixed ~check-declare~, melpazoid, CI, README, tests.
+
+* v0.3.2 [2026-06-15 Mon]
+
+** Functional changes:
+
+- Renaming from *ai* to *cui*, replacing ai word to agent.
+
+- Displaying count of active request moved to “progress reporter” notification.
+
+- Added optional feature to fold markdown blocks.
+
+** Improvements:
+
+- Better composing markdown block for filepath, better checking if file is binary.
+
+- Better highlighting for **..**, for fill-paragraph such lines will not be splitted.
+
+- Refactoring of filling lines.
+
+* v0.3.1 [2026-05-12 Tue]
+
+** Functional changes:
+
+- added ability to send images and audio files like ~@/a.jpg~ or ~[[/a.wav]]~ or ~[[file:/a.jpg]]~, see [[file:./doc.org::534::*Image link: json][Image link: json]]
+
+- added hook that allow to modify any parameter of request
+
+** Improvements:
+
+- Added CHANGELOG and cui-block-msgs.el files
+
+- refactoring that separate restapi and block-tags
+
+- fixed completion mode, now still supported
+
+- refactor of parsing cui block header in cui.el
+
+
+* v0.3 [2026-04-26 Sun]
+
+Work on stabilization and fixes, refactoring and renames.
+
+** Functional changes:
+
+- Noweb and link expansion refactoring, more robust handling.
+
+- Improved chat-role masking and file expansion for .ai, .org.
+
+- Fill-paragraph functions: several fixes, tests, and enhancements.
+
+** Improvements:
+
+- Better handling of edge cases (zero-length links, timestamps).
+
+- Robust UTF-8 stream processing.
+
+- Test and dependency fixes for more reliable CI runs.
+
+
+* v0.2 [2026-02-22 Sun]
+
+- Refactoring in block and block-tags.
+
+- Moving insert commands from restapi to block.el
+
+- Better highlighting, LaTeX fontification.
+
+- Better noweb links
+
+- Rewritin mark-at-point function
