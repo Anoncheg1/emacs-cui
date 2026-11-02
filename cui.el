@@ -4,7 +4,7 @@
 ;; Author: <github.com/Anoncheg1,codeberg.org/Anoncheg>
 ;; Keywords: org, comm, url, link
 ;; URL: https://codeberg.org/Anoncheg/emacs-cui
-;; Version: 0.3.2
+;; Version: 0.4
 ;; Created: 27 dec 2025
 ;; Package-Requires: ((emacs "29.1"))
 ;; Optional dependency: ((org-links "0.2"))
