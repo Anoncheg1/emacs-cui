@@ -1702,28 +1702,6 @@ For _INFO HASH check `org-babel-where-is-src-block-result' function."
 
 (defun cui-block-remove-result (&optional header-marker info keep-keyword)
   "Remove the result of the current CUI block.
-INFO argument is currently ignored.
-When KEEP-KEYWORD is non-nil, keep the #+RESULT keyword and just remove
-the rest of the result.
-When HEADER-MARKER is specified, result removed from target block, see
- `cui-block-insert-result-message'."
-  (interactive)
-  (let ((location (cui-block-where-is-result nil info))
-        (case-fold-search t))
-    (when location
-      (save-excursion
-        (goto-char location)
-        (when (looking-at org-babel-result-regexp)
-          (delete-region
-           (if keep-keyword (line-beginning-position 2)
-             (save-excursion
-               (skip-chars-backward " \r\t\n")
-               (line-beginning-position 2)))
-           (progn (forward-line) (org-babel-result-end))))))))
-
-
-(defun cui-block-remove-result (&optional header-marker info keep-keyword)
-  "Remove the result of the current CUI block.
 When HEADER-MARKER is non-nil, remove the result of the block it points
  into (see `cui-block-insert-result-message'); otherwise use the current
  buffer (INFO is passed to `cui-block-where-is-result' to locate the
