@@ -616,24 +616,59 @@ POS should be within any region, or at its left boundary.  Else return
           nil))))
 
 ;; -=-= at-special-p
+(defun cui-block--at-special-p (pos &optional what)
+  "Check if POS is at a quote, chat prefix, or Org table.
 
-(defun cui-block--at-special-p (pos &optional dont-check-tables)
-  "Check if POS: quoted, is a table or at line with chat prefix.
-Optional argument LIM-BEG is cui block begining position.
-Return t if pos in markdown block, table or quote.
-Side-effect: set pointer position to POS.
-If Optional argument DONT-CHECK-TABLES is not-nil disable checking if
-pos at Org table.
-Modifies the match data."
-  (goto-char pos)
-  (prog1
-      ;; not quoted, in tables
-      (progn (goto-char pos)
-             (beginning-of-line)
-             (or (looking-at "^\\s-*> ") ; from `cui-block-fill-region-as-paragraph'
-                 (looking-at cui-block--chat-prefixes-re)
-                 (and (not dont-check-tables) (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))) ; skip tables
-    (goto-char pos)))
+WHAT is a symbol or a list of symbols among `table', `quote', `link'
+ `chat-prefix', `chat-prefix-line'; only those constructs are tested.  A
+ nil WHAT checks nothing.  A single symbol is treated as a
+ one-elementlist. `chat-prefix' check if POS at prefix,
+ `chat-prefix-line' check if prefix on line with POS
+
+Return non-nil if POS matches any requested construct.
+Move pointer and modify the match data."
+  (let ((what (if (not what)
+                  '(table quote chat-prefix-line link)
+                  ;; else
+               (if (listp what) what (list what)))))
+    (goto-char pos)
+    (or
+     (and (memq 'chat-prefix what)
+             (save-excursion
+               ;; org-in-regex match even after chat prefix at space.
+               (while (and (not (bolp)) (eq (syntax-class (syntax-after (point))) 0))
+                 (goto-char (1- pos)))
+               (org-in-regexp cui-block--chat-prefixes-re)))
+          (and (memq 'link what)
+               (org-in-regexp org-link-any-re))
+          (progn
+            (goto-char pos)
+            (beginning-of-line)
+            (or (and (memq 'quote what)
+                     (looking-at "^\\s-*> "))
+                (and (memq 'chat-prefix-line what)
+                     (looking-at cui-block--chat-prefixes-re))
+                (and (memq 'table what)
+                     (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))))))
+
+
+;; (defun cui-block--at-special-p (pos &optional dont-check-tables)
+;;   "Check if POS: quoted, is a table or at line with chat prefix.
+;; Optional argument LIM-BEG is cui block begining position.
+;; Return t if pos in markdown block, table or quote.
+;; Side-effect: set pointer position to POS.
+;; If Optional argument DONT-CHECK-TABLES is not-nil disable checking if
+;; pos at Org table.
+;; Move pointer and modifies the match data."
+;;   (goto-char pos)
+;;   (prog1
+;;       ;; not quoted, in tables
+;;       (progn (goto-char pos)
+;;              (beginning-of-line)
+;;              (or (looking-at "^\\s-*> ") ; from `cui-block-fill-region-as-paragraph'
+;;                  (looking-at cui-block--chat-prefixes-re)
+;;                  (and (not dont-check-tables) (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))) ; skip tables
+;;     (goto-char pos)))
 
 
 ;; -=-= Markdown - block - regions, block-p, content-range
@@ -1799,7 +1834,8 @@ Executed in `font-lock-defaults' chain."
     (while (re-search-forward "^[\s-]*|" end t)
       (setq mbeg (match-beginning 0)) ; (prop-match-beginning match))
       (save-match-data
-        (unless (cui-block--at-special-p mbeg)
+        (unless (cui-block--at-special-p mbeg '(quote chat-prefix-line))
+          (goto-char mbeg)
           (end-of-line)
           (remove-text-properties mbeg (point)
                                   (list 'face))
@@ -1911,18 +1947,18 @@ support splitting."
       (setq b2 (match-beginning 2)) ;; Group 2 is now the text inside the asterisks
       (setq e2 (match-end 2))
 
-      (unless (cui-block--at-special-p b2)
+      (unless (cui-block--at-special-p b2 '(quote table chat-prefix link))
         ;; Clean up old properties
         (remove-text-properties b1 e1 '(face nil org-emphasis))
         (put-text-property b1 e1 'face (list :inherit '(org-block)))
 
         ;; Apply bolding safely without throwing off the cursor position
-        (save-excursion
-          (beginning-of-line)
-          (if (looking-at cui-block--markdown-header-re)
-              (put-text-property b2 e2 'face 'bold)
-            ;; else
-            (add-text-properties b2 e2 (list 'face (list :inherit '(bold org-block)))))))
+        (goto-char b1)
+        (beginning-of-line)
+        (if (looking-at cui-block--markdown-header-re)
+            (put-text-property b2 e2 'face 'bold)
+          ;; else
+          (add-text-properties b2 e2 (list 'face (list :inherit '(bold org-block))))))
 
       (goto-char e1))
 
@@ -1936,8 +1972,7 @@ support splitting."
             (setq e1 (match-end 0))
             (setq b2 (match-beginning 1))
             (setq e2 (match-end 1))
-            (unless (cui-block--at-special-p b2)
-
+            (unless (cui-block--at-special-p b2 '(quote chat-prefix link))
 
               ;; Only fontify the marker, not surrounding text
               (put-text-property b2 e2
@@ -1971,7 +2006,7 @@ We search for \\[...\\] multiline \\(...\\) from LIM-BEG to LIM-END."
       (setq sbeg (match-beginning 0))
       (setq send (match-end 0))
 
-      (unless (or (cui-block--at-special-p send t) ; multiline block with language
+      (unless (or (cui-block--at-special-p send '(quote link chat-prefix)) ; multiline block with language
                   (cui-block--markdown-quotes-p send)) ; line
         (org-src-font-lock-fontify-block "latex" sbeg send))
       (goto-char send))
@@ -1980,7 +2015,7 @@ We search for \\[...\\] multiline \\(...\\) from LIM-BEG to LIM-END."
     (while (re-search-forward "[^\\(]\\\\\(.*\\\\\)[^\\)]" lim-end t)
       (setq sbeg (match-beginning 0))
       (setq send (match-end 0))
-      (unless (or (cui-block--at-special-p send t)
+      (unless (or (cui-block--at-special-p send '(quote link chat-prefix))
                   (cui-block--markdown-quotes-p send)) ; line
         (org-src-font-lock-fontify-block "latex" sbeg send))
       (goto-char send))
@@ -2028,7 +2063,8 @@ TODO: fontify if there is only end of cui block on page."
           (cui-block--fontify-latex-blocks beg end))
         ;; "---"
         (when cui-block-fontify-pagesep-flag
-          (cui-block--fontify-markdown-pagesep beg end)))
+          (cui-block--fontify-markdown-pagesep beg end))
+        )
       (goto-char end))
     ;; required by font lock mode:
     (goto-char limit))) ; return t
