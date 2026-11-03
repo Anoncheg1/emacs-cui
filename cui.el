@@ -164,9 +164,7 @@
 ;;  suite for this
 ;; - make org-to-markdown as a separage file.
 ;; - Implement  Agent Client Protocol (ACP) and Websocket
-;; - Ability to use several SYS prompts and store it separately.
-;; - optional folding of headers should show subheaders, not first level only
-;; - add replaction of - to – (em-dash) and - to en-dash between range.
+
 ;;; Code:
 
 ;; Touch: Pain, water and warm.
@@ -221,7 +219,8 @@ In the current buffer:
   :group 'cui)
 
 (defcustom cui-before-send-hook-stop-flag t
-  "Non-nil means stop if `cui-before-send-hook' modify last user message."
+  "Non-nil means to halt when hook modify the last user message.
+`cui-before-send-hook'."
   :type 'hook
   :group 'cui)
 
@@ -251,10 +250,10 @@ REQ-TYPE symbol is completion or chat mostly.  Set by
           (unwind-protect
               (let ((str (buffer-substring-no-properties  last-beg-m last-end-m))) ; the last user message
                 (run-hook-with-args 'cui-before-send-hook last-beg-m last-end-m)
-                (unless (string-equal str (buffer-substring-no-properties last-beg-m last-end-m))
-                  (when cui-before-send-hook-stop-flag
-                    (funcall cui-restapi-show-error-function "CUI block was modified by hook." (cui-block-get-header-marker element))
-                    (throw 'stop nil))))
+                (when (and cui-before-send-hook-stop-flag
+                           (not (string-equal str (buffer-substring-no-properties last-beg-m last-end-m))))
+                  (funcall cui-restapi-show-error-function "CUI block was modified by hook." (cui-block-get-header-marker element))
+                  (throw 'stop nil)))
             ;; UNWINDFORMS
             (set-marker last-beg-m nil)
             (set-marker last-end-m nil))))
