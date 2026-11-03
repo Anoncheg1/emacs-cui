@@ -618,39 +618,28 @@ POS should be within any region, or at its left boundary.  Else return
 ;; -=-= at-special-p
 (defun cui-block--at-special-p (pos &optional what)
   "Check if POS is at a quote, chat prefix, or Org table.
-
-WHAT is a symbol or a list of symbols among `table', `quote', `link'
- `chat-prefix', `chat-prefix-line'; only those constructs are tested.  A
- nil WHAT checks nothing.  A single symbol is treated as a
- one-elementlist. `chat-prefix' check if POS at prefix,
- `chat-prefix-line' check if prefix on line with POS
+WHAT is a symbol or list of symbols among `table', `quote', `link',
+`chat-prefix', `chat-prefix-line'; only those constructs are tested.  A
+nil WHAT checks nothing.  A single symbol is treated as a one-element
+list.  `chat-prefix' checks if POS is at a prefix; `chat-prefix-line'
+checks if a prefix is on the line with POS.
 
 Return non-nil if POS matches any requested construct.
 Move pointer and modify the match data."
-  (let ((what (if (not what)
-                  '(table quote chat-prefix-line link)
-                  ;; else
-               (if (listp what) what (list what)))))
+  (let ((what (if what (if (listp what) what (list what))
+                '(table quote chat-prefix-line link))))
     (goto-char pos)
-    (or
-     (and (memq 'chat-prefix what)
-             (save-excursion
-               ;; org-in-regex match even after chat prefix at space.
-               (while (and (not (bolp)) (eq (syntax-class (syntax-after (point))) 0))
-                 (goto-char (1- pos)))
-               (org-in-regexp cui-block--chat-prefixes-re)))
-          (and (memq 'link what)
-               (org-in-regexp org-link-any-re))
-          (progn
-            (goto-char pos)
-            (beginning-of-line)
-            (or (and (memq 'quote what)
-                     (looking-at "^\\s-*> "))
-                (and (memq 'chat-prefix-line what)
-                     (looking-at cui-block--chat-prefixes-re))
-                (and (memq 'table what)
-                     (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))))))
-
+    (or (and (memq 'chat-prefix what)
+             (org-in-regexp cui-block--chat-prefixes-re))
+        (and (memq 'link what) (org-in-regexp org-link-any-re))
+        (progn
+          (goto-char pos)
+          (beginning-of-line)
+          (or (and (memq 'quote what) (looking-at "^\\s-*> "))
+              (and (memq 'chat-prefix-line what)
+                   (looking-at cui-block--chat-prefixes-re))
+              (and (memq 'table what)
+                   (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))))))
 
 ;; (defun cui-block--at-special-p (pos &optional dont-check-tables)
 ;;   "Check if POS: quoted, is a table or at line with chat prefix.
@@ -798,6 +787,19 @@ Modify the match data."
     (or (cui-block--markdown-quotes-at-line-p pos "`")
         (cui-block--markdown-quotes-at-line-p pos "```"))))
 
+;; (defun cui-block--markdown-quotes-at-line-p (pos &optional delimiter beg end)
+;;   (goto-char pos)
+;;   (if (string-equal delimiter "`")
+;;       (org-in-regexp "`[^`\n]+`" 0)
+;;     (org-in-regexp "^```[^\n]*\n\\(?:.*\n\\)*?```" 0)))
+
+;; (defun cui-block--markdown-quotes-p (pos)
+;;   "Return non-nil if POS is inside markdown code (inline ` or ```fence```).
+;; Includes the delimiter characters themselves."
+;;   (save-excursion
+;;     (goto-char pos)
+;;     (or (org-in-regexp "`[^`\n]+`" 100)
+;;         (org-in-regexp "^```[^\n]*\n\\(?:.*\n\\)*?```" 100))))
 
 ;; -=-= Markdown - block - fix indentation
 

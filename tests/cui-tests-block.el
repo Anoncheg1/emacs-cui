@@ -674,6 +674,86 @@ On current line or at quote itself."
   (should-not (cui-tests-block--test--with-temp-buffer-at-pos "ss`foo` and ```bar```" 0 #'cui-block--markdown-quotes-p)))
 
 
+;; -=-= Test: `cui-block--markdown-quotes-p'e
+(defun test--goto-nth (str n)
+  (goto-char (point-min))
+  (let ((case-fold-search nil))
+    (dotimes (_ n) (search-forward str))
+    (goto-char (match-beginning 0))))
+
+(defmacro test--with-buffer (content &rest body)
+  `(with-temp-buffer
+     (insert ,content)
+     (goto-char (point-min))
+     ,@body))
+
+;; ---------- Inline: many spans on one line ----------
+(ert-deftest cui-mdq/inline-two-spans-first ()
+  (test--with-buffer "a `x` b `y` c"
+    (test--goto-nth "`x`" 1)
+    (should (cui-block--markdown-quotes-p (point)))))
+
+(ert-deftest cui-mdq/inline-two-spans-second ()
+  (test--with-buffer "a `x` b `y` c"
+    (test--goto-nth "`y`" 1)
+    (should (cui-block--markdown-quotes-p (point)))))
+
+(ert-deftest cui-mdq/inline-between-spans-is-nil ()
+  (test--with-buffer "a `x` b `y` c"
+    (test--goto-nth " b " 1)
+    (forward-char 1) ;; on 'b'
+    (should-not (cui-block--markdown-quotes-p (point)))))
+
+(ert-deftest cui-mdq/inline-on-opening-backtick ()
+  (test--with-buffer "a `x` b"
+    (test--goto-nth "`x`" 1)  ;; on first backtick
+    (should (cui-block--markdown-quotes-p (point)))))
+
+(ert-deftest cui-mdq/inline-on-closing-backtick ()
+  (test--with-buffer "a `x` b"
+    (test--goto-nth "`x`" 1)
+    (forward-char 2)          ;; on second backtick
+    (should (cui-block--markdown-quotes-p (point)))))
+
+(ert-deftest cui-mdq/unbalanced-single-backtick ()
+  (test--with-buffer "a ` b ` c ` d"
+    ;; three backticks: regexp `[^`\n]+` will pair 1-2 and leave 3 dangling
+    (test--goto-nth " d" 1)
+    (should-not (cui-block--markdown-quotes-p (point)))))
+
+;; ---------- Fenced: two blocks ----------
+(ert-deftest cui-mdq/fence-between-blocks-is-nil ()
+  (test--with-buffer "```\nAAA\n```\ntext\n```\nBBB\n```\n"
+    (test--goto-nth "text" 1)
+    (should-not (cui-block--markdown-quotes-p (point)))))
+
+(ert-deftest cui-mdq/fence-opening-line ()
+  (test--with-buffer "```\nAAA\n```\n"
+    (goto-char (point-min))
+    (should (cui-block--markdown-quotes-p (point)))))
+
+(ert-deftest cui-mdq/fence-closing-line ()
+  (test--with-buffer "```\nAAA\n```\n"
+    (test--goto-nth "```" 2)   ;; second fence = closer
+    (should (cui-block--markdown-quotes-p (point)))))
+
+;; ---------- Mixed ----------
+(ert-deftest cui-mdq/inline-before-fence ()
+  (test--with-buffer "see `x`\n```\nAAA\n```\n"
+    (test--goto-nth "`x`" 1)
+    (should (cui-block--markdown-quotes-p (point)))))
+
+(ert-deftest cui-mdq/inline-after-fence ()
+  (test--with-buffer "```\nAAA\n```\nsee `x`\n"
+    (test--goto-nth "`x`" 1)
+    (should (cui-block--markdown-quotes-p (point)))))
+
+
+(ert-deftest cui-mdq/plain-text-no-code ()
+  (test--with-buffer "just some text, nothing special"
+    (goto-char (point-min))
+    (should-not (cui-block--markdown-quotes-p (point)))))
+
 ;; -=-= Test: `cui-block-mark-at-point'
 (ert-deftest cui-tests-block--mark-at-point ()
     (with-temp-buffer
