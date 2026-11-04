@@ -618,8 +618,12 @@ POS should be within any region, or at its left boundary.  Else return
 ;; -=-= at-special-p
 
 (defun cui-block--in-regexp (regexp &optional pos)
-  "Check for current line only, as simplification of `org-in-regexp'.
-Move pointer."
+  "Return non-nil if POS lies within a match of REGEXP on its line.
+POS defaults to point.  The match is searched for only on the line
+ containing POS, between its beginning and its
+ end.  Unlike`org-in-regexp', no multi-line matches are considered.
+
+Point is moved and match data is modified as a side effect."
   (when pos (goto-char pos))
   (let ((pos (point))
         (eol (line-end-position)))
@@ -627,16 +631,19 @@ Move pointer."
     (when (re-search-forward regexp eol t)
       (and (>= (match-end 0) pos) (<= (match-beginning 0) pos)))))
 
-(defun cui-block--at-special-p (pos &optional what)
-  "Check if POS is at a quote, chat prefix, or Org table.
-WHAT is a symbol or list of symbols among `table', `quote', `link',
-`chat-prefix', `chat-prefix-line'; only those constructs are tested.  A
-nil WHAT checks nothing.  A single symbol is treated as a one-element
-list.  `chat-prefix' checks if POS is at a prefix; `chat-prefix-line'
-checks if a prefix is on the line with POS.
 
-Return non-nil if POS matches any requested construct.
-Move pointer and modify the match data."
+(defun cui-block--at-special-p (pos &optional what)
+  "Return non-nil if POS is inside or at a special block construct.
+POS is a buffer position.  The constructs tested are those named in
+WHAT, a symbol or list of symbols among `table', `quote', `link',
+`chat-prefix', and `chat-prefix-line'; a single symbol is treated as
+a one-element list.  If WHAT is nil, all of `table', `quote', `link',
+and `chat-prefix-line' are tested.  `chat-prefix' tests whether POS
+lies within a chat prefix; `chat-prefix-line' tests whether a chat
+prefix appears on POS's line; `quote' and `table' test the beginning
+of POS's line; `link' tests for an Org link at POS.
+
+Point is moved and match data is modified as a side effect."
   (let ((what (if what (if (listp what) what (list what))
                 '(table quote chat-prefix-line link))))
     (or (and (memq 'chat-prefix what)
@@ -651,24 +658,6 @@ Move pointer and modify the match data."
                    (looking-at cui-block--chat-prefixes-re))
               (and (memq 'table what)
                    (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))))))
-
-;; (defun cui-block--at-special-p (pos &optional dont-check-tables)
-;;   "Check if POS: quoted, is a table or at line with chat prefix.
-;; Optional argument LIM-BEG is cui block begining position.
-;; Return t if pos in markdown block, table or quote.
-;; Side-effect: set pointer position to POS.
-;; If Optional argument DONT-CHECK-TABLES is not-nil disable checking if
-;; pos at Org table.
-;; Move pointer and modifies the match data."
-;;   (goto-char pos)
-;;   (prog1
-;;       ;; not quoted, in tables
-;;       (progn (goto-char pos)
-;;              (beginning-of-line)
-;;              (or (looking-at "^\\s-*> ") ; from `cui-block-fill-region-as-paragraph'
-;;                  (looking-at cui-block--chat-prefixes-re)
-;;                  (and (not dont-check-tables) (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))) ; skip tables
-;;     (goto-char pos)))
 
 
 ;; -=-= Markdown - block - regions, block-p, content-range
