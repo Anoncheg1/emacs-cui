@@ -616,6 +616,17 @@ POS should be within any region, or at its left boundary.  Else return
           nil))))
 
 ;; -=-= at-special-p
+
+(defun cui-block--in-regexp (regexp &optional pos)
+  "Check for current line only, as simplification of `org-in-regexp'.
+Move pointer."
+  (when pos (goto-char pos))
+  (let ((pos (point))
+        (eol (line-end-position)))
+    (beginning-of-line)
+    (when (re-search-forward regexp eol t)
+      (and (>= (match-end 0) pos) (<= (match-beginning 0) pos)))))
+
 (defun cui-block--at-special-p (pos &optional what)
   "Check if POS is at a quote, chat prefix, or Org table.
 WHAT is a symbol or list of symbols among `table', `quote', `link',
@@ -628,10 +639,10 @@ Return non-nil if POS matches any requested construct.
 Move pointer and modify the match data."
   (let ((what (if what (if (listp what) what (list what))
                 '(table quote chat-prefix-line link))))
-    (goto-char pos)
     (or (and (memq 'chat-prefix what)
-             (org-in-regexp cui-block--chat-prefixes-re))
-        (and (memq 'link what) (org-in-regexp org-link-any-re))
+             (cui-block--in-regexp cui-block--chat-prefixes-re pos))
+             ;; (org-in-regexp cui-block--chat-prefixes-re))
+        (and (memq 'link what) (cui-block--in-regexp org-link-any-re pos))
         (progn
           (goto-char pos)
           (beginning-of-line)
@@ -687,13 +698,12 @@ Move pointer and modify the match data."
                       (looking-at cui-block--markdown-begin-re)))
       (push markdown-beg regions)
       (push end regions))
-    ;; (print (list regions (member markdown-beg regions)))
     (when regions
       (reverse regions))))
 
 
 (defun cui-block--markdown-block-p (&optional limit-start limit-end regions)
-  "Return (cons beg end) if pos is inside markdown block.
+  "Return (cons beg end) if current line is inside markdown block.
 Execution in not `org-mode' is supported.
 If POS is not provided current cursor position is used.
 LIMIT-START and LIMIT-END are parameters for
@@ -1205,7 +1215,6 @@ and content end at the beginin and the end of flat list."
                         (cui-block--markdown-block-p content-start content-end regions)))
               (push (match-beginning 0) positions))
           ;; else
-          ;; (print(buffer-substring-no-properties (1- (match-beginning 0)) (match-end 0)))
           (push (match-beginning 0) positions))
         (goto-char (match-end 0)))
       (setq positions (nreverse positions))
@@ -2065,8 +2074,7 @@ TODO: fontify if there is only end of cui block on page."
           (cui-block--fontify-latex-blocks beg end))
         ;; "---"
         (when cui-block-fontify-pagesep-flag
-          (cui-block--fontify-markdown-pagesep beg end))
-        )
+          (cui-block--fontify-markdown-pagesep beg end)))
       (goto-char end))
     ;; required by font lock mode:
     (goto-char limit))) ; return t

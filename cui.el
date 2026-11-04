@@ -615,8 +615,7 @@ Highlighting markdown."
     (setq org-font-lock-extra-keywords (cui--insert-after
                                         org-font-lock-extra-keywords
                                         (seq-position org-font-lock-extra-keywords '(org-fontify-meta-lines-and-blocks))
-                                        '(cui-block--font-lock-fontify-markdown-and-org)))
-    ))
+                                        '(cui-block--font-lock-fontify-markdown-and-org)))))
 
 ;; -=-= Tangling advices
 (defun cui--org-babel-get-src-block-info (no-eval datum)
