@@ -452,6 +452,41 @@ TODO: May cause error at `org-element--parse-to' at `re-search-forward'."
     (apply orig-fun args)))
 
 
+;; -=-= Quite region or word at postion
+(defun cui-optional-quote-word-or-region ()
+  "Quote word at point (via `cui-block-mark-step-word') with backticks.
+If region is active and on a single line, quote the region instead.
+Skips targets already wrapped in backticks."
+  (interactive)
+  (let* ((use-region (and (region-active-p)
+                          (= (line-number-at-pos (region-beginning))
+                             (line-number-at-pos (region-end)))))
+         (raw (unless use-region
+                (cui-block-mark-step-word (point) nil nil)))
+         (beg (if use-region (region-beginning) (car raw)))
+         (end (if use-region (region-end) (cadr raw))))
+    ;; (print (list beg end (eq (char-before beg) ?`) (eq (char-before (1+ beg)) ?`)))
+    (cond
+     ((or (null beg) (null end) (>= beg end))
+      (message "Nothing to quote"))
+     ((or
+       (and use-region
+            (save-excursion
+              (goto-char beg)
+              (search-forward "`" end t)))
+       (eq (char-before beg) ?`)
+       (eq (char-after end) ?`)
+       (eq (char-before (1+ beg)) ?`)
+       (eq (char-after (1- end)) ?`))
+      (message "Already quoted"))
+     (t
+      (save-excursion
+        (goto-char end) (insert "`")
+        (goto-char beg) (insert "`"))
+      (message "Quoted")))))
+;; set in .emacs:
+;; (define-key cui-mode-map (kbd "C-`") #'cui-block-quote-word-or-region)
+
 ;;;; provide
 (provide 'cui-optional)
 ;;; cui-optional.el ends here

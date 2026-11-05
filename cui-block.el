@@ -1449,7 +1449,7 @@ a `**'/`__' pair and no special construct matched."
       (if quotes
           (list (car quotes) (cdr quotes))
         (let ((special (cui-block--at-special-p
-                        pos '(quote chat-prefix-line link bold))))
+                        pos '(quote chat-prefix link bold))))
           (if special
               (list (car special) (cdr special))
             (goto-char pos)
