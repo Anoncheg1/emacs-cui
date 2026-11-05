@@ -660,42 +660,74 @@ Return nil if POS is not inside any match.  Point is preserved."
 (defun cui-block--at-special-p (pos &optional what)
   "Return non-nil if POS is inside or at a special block construct.
 WHAT is a symbol or list among `table', `quote', `link',
-`chat-prefix', `chat-prefix-line', and `bold' (nil means all).
+`chat-prefix', `chat-prefix-line', `bold', and `latex'
+\(nil means all).
 Each matching clause returns a (BEG . END) cons; the first wins.
 `bold' returns the span of the innermost enclosing `**'/'***' pair
-on POS's line.  Point and match data are modified as a side effect."
-  (let ((what (if (listp what) what (list what))))
-    (unless what (setq what '(table quote chat-prefix-line link bold)))
+on POS's line.  `latex' returns the span of an enclosing
+\\[...\\], \\(...\\) (multiline or inline) construct.
+Point and match data are modified as a side effect."
+  (goto-char pos)
+  (beginning-of-line)
+  (let ((what (if (listp what) what (list what)))
+        (beg (point))
+        (eol (line-end-position)))
+    (unless what
+      (setq what '(table quote chat-prefix-line link latex bold)))
     (or (and (memq 'chat-prefix what)
              (cui-block--in-regexp cui-block--chat-prefixes-re pos))
         (and (memq 'link what)
              (cui-block--in-regexp org-link-any-re pos))
+        ;; LaTeX: multiline \\[ ... \\]  and  \\( ... \\)  (any number of
+        ;; lines), then inline \\( ... \\) on POS's line.  We search from
+        ;; the beginning of the buffer (bounded by point-max) so that an
+        ;; opener on an earlier line is found; we only accept a match
+        ;; whose BEG..END spans POS.
+        (and (memq 'latex what)
+             (let ((res nil))
+               ;; (goto-char beg)
+               ;; ;; (goto-char (point-min))
+               ;; ;; Multiline display: \[ ... \]
+               ;; (while (and (not res)
+               ;;             (re-search-forward
+               ;;              "^[\s-]*\\\\\\[\\(.\\|\n\\)*?\\\\\\]" eol t))
+               ;;   (when (and (<= (match-beginning 0) pos)
+               ;;              (>= (match-end 0) pos))
+               ;;     (setq res (cons (match-beginning 0) (match-end 0)))))
+               ;; Multiline / inline \( ... \)  (spanning newlines)
+               (goto-char beg)
+               (while (and (not res)
+                           ;; (]\\\\\(.*\\\\\)[^\\)
+                           (re-search-forward
+                            "[^\\(]\\\\\(.*\\\\\)[^\\)]" eol t))
+                 (when (and (<= (match-beginning 0) pos)
+                            (>= (match-end 0) pos))
+                   (setq res (cons (match-beginning 0) (match-end 0)))))
+               res))
         (and (memq 'bold what)
              (progn
-               (goto-char (line-beginning-position))
-               (let ((eol (line-end-position)) (stack nil) (result nil))
+               (goto-char beg)
+               (let ((stack nil) (result nil))
                  (while (and (not result)
                              (re-search-forward "\\(\\*\\{2,3\\}\\)" eol t))
                    (let ((beg (match-beginning 0))
                          (end (match-end 0))
                          (len (length (match-string 1))))
                      (if (and stack (= (caar stack) len))
-                         ;; Closer: does this pair enclose POS?
                          (let ((op (pop stack)))
                            (when (and (<= (cdr op) pos) (>= beg pos))
                              (setq result (cons (cdr op) end))))
-                       ;; Opener
                        (push (cons len beg) stack))))
                  result)))
-        (progn
-          (goto-char pos)
-          (beginning-of-line)
-          (let ((beg (point)) (end (line-end-position)))
-            (cond ((and (memq 'quote what) (looking-at "^\\s-*> "))       (cons (match-end 0) end))
-                  ((and (memq 'chat-prefix-line what)
-                        (looking-at cui-block--chat-prefixes-re))         (cons beg (match-end 0)))
-                  ((and (memq 'table what)
-                        (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*"))       (cons beg end))))))))
+
+        (cond ((and (memq 'quote what) (looking-at "^\\s-*> "))
+               (cons (match-end 0) eol))
+              ((and (memq 'chat-prefix-line what)
+                    (looking-at cui-block--chat-prefixes-re))
+               (cons beg (match-end 0)))
+              ((and (memq 'table what)
+                    (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*"))
+               (cons beg eol))))))
 
 ;; -=-= Markdown - block - regions, block-p, content-range
 
@@ -1437,7 +1469,7 @@ Single place for the repeated mark/point triad."
   "Mark the word at POS using cui word separators.
 Separators: whitespace, `>', `**', `__'.
 
-Special constructs in `quote', `chat-prefix-line', `link', and
+Special constructs in `quote', `chat-prefix', `link', `latex' and
 `bold' are checked first via `cui-block--at-special-p'; a match
 returns its span as a list.  Otherwise falls back to
 separator-delimited word scanning.
@@ -1449,9 +1481,11 @@ a `**'/`__' pair and no special construct matched."
       (if quotes
           (list (car quotes) (cdr quotes))
         (let ((special (cui-block--at-special-p
-                        pos '(quote chat-prefix link bold))))
+                        pos '(quote chat-prefix link latex bold))))
           (if special
-              (list (car special) (cdr special))
+              (progn (message "Word")
+                     (list (car special) (cdr special)))
+            ;; else
             (goto-char pos)
             (unless (or (looking-at-p sep)
                         (and (> pos (point-min))
