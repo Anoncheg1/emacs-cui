@@ -679,7 +679,7 @@ ORIG-FUN is `cui--org-babel-get-src-block-info-advice' and its ARGS."
         ;; else
         (apply orig-fun args)))))
 
-;; -=-= xref for Markdown blocks
+;; -=-= xref for Markdown blocks and quoted words
 
 (defun cui-xref-elisp-advice (orig-fun &rest args)
   "If inside makrdown block, jump to definition using the language.
@@ -687,7 +687,7 @@ Support only elisp.
 Argument ORIG-FUN is `xref-find-definitions'.
 Optional argument ARGS is `xref-find-definitions' related arguments."
   (if (and (bound-and-true-p cui-mode)
-           (cui-block-p))
+           (cui-block-p)) ; inside CUI block
       (let* ((beg (car (save-excursion (cui-block--markdown-block-p))))
              (lang (when beg (save-excursion (goto-char beg)
                                              (when (looking-at cui-block--markdown-begin-re)
