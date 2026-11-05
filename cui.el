@@ -692,7 +692,10 @@ Optional argument ARGS is `xref-find-definitions' related arguments."
              (lang (when beg (save-excursion (goto-char beg)
                                              (when (looking-at cui-block--markdown-begin-re)
                                                (match-string 1))))))
-        (if (member lang '("lisp" "elisp" "emacs-lisp"))
+        (if (or (and beg (member lang '("lisp" "elisp" "emacs-lisp")))
+                (and (not beg)
+                     (equal xref-backend-functions '(etags--xref-backend))
+                     (not tags-file-name))) ; case for qouted word not in markdown block with one etag backed and not configured
             (let ((xref-backend-functions '(elisp--xref-backend)))
               (setq xref-backend-functions xref-backend-functions)  ; noqa for: Warning: Unused lexical variable
               (with-syntax-table emacs-lisp-mode-syntax-table
