@@ -674,6 +674,45 @@ On current line or at quote itself."
   (should-not (cui-tests-block--test--with-temp-buffer-at-pos "ss`foo` and ```bar```" 0 #'cui-block--markdown-quotes-p)))
 
 
+;; new tests
+(ert-deftest cui-mq--multi-and-empty-pairs ()
+  ;; Layout:  ` a ` sp ` b `   (positions 1..7)
+  (with-temp-buffer
+    (insert "`a` `b`")
+    (goto-char (point-min))
+    (should (equal (cui-block--markdown-quotes-at-line-p 2) '(2 . 3)))
+    (should (equal (cui-block--markdown-quotes-at-line-p 6) '(6 . 7))))
+  ;; Layout:  a sp ` ` sp b   (backticks at 3 and 4) -- zero-width interior
+  (with-temp-buffer
+    (insert "a `` b")
+    (goto-char (point-min))
+    ;; open-end = 4, close-beg = 4 -> cdr clamped to max(4, 3) = 4 -> (4 . 4)
+    (should (equal (cui-block--markdown-quotes-at-line-p 4) '(4 . 4)))
+    (should (equal (cui-block--markdown-quotes-at-line-p 3) '(4 . 4)))))
+
+(ert-deftest cui-mq--delimiter-and-beg-end ()
+  ;; Layout:  x ` ` ` y ` ` ` z   (positions 1..9)
+  (with-temp-buffer
+    (insert "x```y```z")
+    (goto-char (point-min))
+    ;; With explicit "```": containment region is [2, 9).
+    (should (equal (cui-block--markdown-quotes-at-line-p 3 "```") '(5 . 6)))
+    (should (equal (cui-block--markdown-quotes-at-line-p 5 "```") '(5 . 6)))
+    (should-not (cui-block--markdown-quotes-at-line-p 9 "```"))
+    ;; Default "`": the adjacent tick pair at 2,3 is an empty pair [2,4),
+    ;; canonicalized to (3 . 3); POS 2 and 3 are inside, POS 1 is not.
+    (should (equal (cui-block--markdown-quotes-at-line-p 3) '(3 . 3)))
+    (should (equal (cui-block--markdown-quotes-at-line-p 2) '(3 . 3)))
+    (should-not (cui-block--markdown-quotes-at-line-p 1)))
+
+  ;; Explicit BEG/END on a single-pair line
+  (with-temp-buffer
+    (insert "a `bc` d")
+    (goto-char (point-min))
+    (let ((b (point-min)) (e (point-max)))
+      (should (equal (cui-block--markdown-quotes-at-line-p 4 "`" b e) '(4 . 6)))
+      (should-not (cui-block--markdown-quotes-at-line-p 2 "`" b e)))))
+
 ;; -=-= Test: `cui-block--markdown-quotes-p'e
 (defun test--goto-nth (str n)
   (goto-char (point-min))
@@ -1619,6 +1658,51 @@ CUI mode) is never called."
       (goto-char (point-min))
       (should-not (re-search-forward "^[ \t]*#\\+RESULTS:" nil t))
       (should (string-match-p "(\\+ 1 2)" (buffer-string))))))
+;; -=-= Test: `cui-block--at-special-p'
+(defun cui-block-test--at (text pos)
+  "Insert TEXT in temp buffer, call `cui-block--at-special-p' at POS with 'bold."
+  (with-temp-buffer
+    (insert text)
+    (cui-block--at-special-p pos 'bold)))
+
+(ert-deftest cui-block--at-special-p/bold-double-star ()
+  "POS between `**' runs is bold; POS outside is not."
+  ;; text:  0         1
+  ;;        0123456789012345
+  (let ((text "x **bold** y"))
+    (should (cui-block-test--at text 5))   ; inside "bold"
+    (should (cui-block-test--at text 6))   ; inside "bold"
+    (should-not (cui-block-test--at text 1))  ; before opening `**'
+    (should-not (cui-block-test--at text 11)))) ; after closing `**'
+
+(ert-deftest cui-block--at-special-p/bold-triple-star ()
+  "POS between `***' runs is bold."
+  (let ((text "x ***bold*** y"))
+    (should (cui-block-test--at text 6))   ; inside "bold"
+    (should (cui-block-test--at text 7))   ; inside "bold"
+    (should-not (cui-block-test--at text 1))
+    (should-not (cui-block-test--at text 13))))
+
+(ert-deftest cui-block--at-special-p/bold-mismatched-lengths ()
+  "Mismatched `**' vs `***' delimiters must not count as bold."
+  (should-not (cui-block-test--at "x **bold*** y" 6))
+  (should-not (cui-block-test--at "x ***bold** y" 6)))
+;; -=-= Test: `cui-block--in-regexp'
+(ert-deftest cui-block--in-regexp-inside ()
+  "Point inside a match returns its span."
+  (with-temp-buffer
+    (insert "foo BAR baz")
+    (goto-char 6)                    ; inside "BAR"
+    (should (equal (cui-block--in-regexp "BAR") '(5 . 8)))))
+
+(ert-deftest cui-block--in-regexp-outside ()
+  "Point outside any match returns nil and leaves point alone."
+  (with-temp-buffer
+    (insert "foo BAR baz")
+    (goto-char 1)
+    (should-not (cui-block--in-regexp "BAR"))
+    (should (= (point) 1))))         ; save-excursion preserved point
+
 ;; -=-= provide
 (provide 'cui-tests-block)
 

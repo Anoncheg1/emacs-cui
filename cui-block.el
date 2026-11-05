@@ -147,6 +147,29 @@ TODO: for streaming: save and pass begining of paragraph or line."
                  (function :tag "Function"))
   :group 'cui)
 
+(defcustom cui-block-mark-steps
+  '(cui-block-mark-step-word
+    cui-block-mark-step-org-element
+    cui-block-mark-step-markdown-content
+    cui-block-mark-step-markdown-with-header
+    cui-block-mark-step-chat-message
+    cui-block-mark-step-block-content
+    cui-block-mark-step-whole-block)
+  "Ordered list of step functions.
+Used by `cui-block-mark-at-point-by-steps'.
+
+Each step is called with one argument CTX, a plist containing
+  :pos        original point position
+  :block-beg  beginning of the cui block
+  :block-end  end of the cui block
+Point is moved to :pos before each step is called.
+
+It must return either nil, or a list (BEG END) of the region it would
+mark.  Steps that fail should return nil so the driver can skip them.
+Reordering, removing, or appending symbols customizes the progression."
+  :type '(repeat function)
+  :group 'cui-block)
+
 ;; -=-= faces
 (defface cui-block-quote
     '((((class color) (min-colors 88) (background dark))  :background "#282828" :foreground "shadow")
@@ -618,47 +641,61 @@ POS should be within any region, or at its left boundary.  Else return
 ;; -=-= at-special-p
 
 (defun cui-block--in-regexp (regexp &optional pos)
-  "Return non-nil if POS lies within a match of REGEXP on its line.
-POS defaults to point.  The match is searched for only on the line
- containing POS, between its beginning and its
- end.  Unlike`org-in-regexp', no multi-line matches are considered.
-
-Point is moved and match data is modified as a side effect."
-  (when pos (goto-char pos))
-  (let ((pos (point))
-        (eol (line-end-position)))
-    (beginning-of-line)
-    (when (re-search-forward regexp eol t)
-      (and (>= (match-end 0) pos) (<= (match-beginning 0) pos)))))
-
+  "Return (BEG . END) if POS lies within a match of REGEXP on its line.
+POS defaults to point.  Only the line containing POS is searched;
+unlike `org-in-regexp', multi-line matches are not considered.
+Return nil if POS is not inside any match.  Point is preserved."
+  (save-excursion
+    (when pos (goto-char pos))
+    (let ((pos (point))
+          (eol (line-end-position)))
+      (beginning-of-line)
+      (catch 'found
+        (while (re-search-forward regexp eol t)
+          (when (and (>= (match-end 0) pos)
+                     (<= (match-beginning 0) pos))
+            (throw 'found (cons (match-beginning 0) (match-end 0)))))
+        nil))))
 
 (defun cui-block--at-special-p (pos &optional what)
   "Return non-nil if POS is inside or at a special block construct.
-POS is a buffer position.  The constructs tested are those named in
-WHAT, a symbol or list of symbols among `table', `quote', `link',
-`chat-prefix', and `chat-prefix-line'; a single symbol is treated as
-a one-element list.  If WHAT is nil, all of `table', `quote', `link',
-and `chat-prefix-line' are tested.  `chat-prefix' tests whether POS
-lies within a chat prefix; `chat-prefix-line' tests whether a chat
-prefix appears on POS's line; `quote' and `table' test the beginning
-of POS's line; `link' tests for an Org link at POS.
-
-Point is moved and match data is modified as a side effect."
-  (let ((what (if what (if (listp what) what (list what))
-                '(table quote chat-prefix-line link))))
+WHAT is a symbol or list among `table', `quote', `link',
+`chat-prefix', `chat-prefix-line', and `bold' (nil means all).
+Each matching clause returns a (BEG . END) cons; the first wins.
+`bold' returns the span of the innermost enclosing `**'/'***' pair
+on POS's line.  Point and match data are modified as a side effect."
+  (let ((what (if (listp what) what (list what))))
+    (unless what (setq what '(table quote chat-prefix-line link bold)))
     (or (and (memq 'chat-prefix what)
              (cui-block--in-regexp cui-block--chat-prefixes-re pos))
-             ;; (org-in-regexp cui-block--chat-prefixes-re))
-        (and (memq 'link what) (cui-block--in-regexp org-link-any-re pos))
+        (and (memq 'link what)
+             (cui-block--in-regexp org-link-any-re pos))
+        (and (memq 'bold what)
+             (progn
+               (goto-char (line-beginning-position))
+               (let ((eol (line-end-position)) (stack nil) (result nil))
+                 (while (and (not result)
+                             (re-search-forward "\\(\\*\\{2,3\\}\\)" eol t))
+                   (let ((beg (match-beginning 0))
+                         (end (match-end 0))
+                         (len (length (match-string 1))))
+                     (if (and stack (= (caar stack) len))
+                         ;; Closer: does this pair enclose POS?
+                         (let ((op (pop stack)))
+                           (when (and (<= (cdr op) pos) (>= beg pos))
+                             (setq result (cons (cdr op) end))))
+                       ;; Opener
+                       (push (cons len beg) stack))))
+                 result)))
         (progn
           (goto-char pos)
           (beginning-of-line)
-          (or (and (memq 'quote what) (looking-at "^\\s-*> "))
-              (and (memq 'chat-prefix-line what)
-                   (looking-at cui-block--chat-prefixes-re))
-              (and (memq 'table what)
-                   (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*")))))))
-
+          (let ((beg (point)) (end (line-end-position)))
+            (cond ((and (memq 'quote what) (looking-at "^\\s-*> "))       (cons beg end))
+                  ((and (memq 'chat-prefix-line what)
+                        (looking-at cui-block--chat-prefixes-re))         (cons beg end))
+                  ((and (memq 'table what)
+                        (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*"))       (cons beg end))))))))
 
 ;; -=-= Markdown - block - regions, block-p, content-range
 
@@ -737,6 +774,7 @@ Move pointer at the end of the last markdown subblock footer and modify
               (when (zerop (mod (cdr res) 2))
                 (car res)))))))))
 
+
 (defun cui-block--markdown-block-content-range (m-block-start m-block-end)
   "For markdown subblock return cons of content start and content ends.
 M-BLOCK-START M-BLOCK-END are line begin position of markdown range with
@@ -755,50 +793,47 @@ Move pointer."
 
 
 (defun cui-block--markdown-quotes-at-line-p (pos &optional delimiter beg end)
-  "Return t if POS is inside any markdown quotes at current line.
-if BEG END not provided, look for DELIMITER at the current line only.
-DELIMITER should be a string (\"`\" or \"```\"), defaults to \"`\".
+  "Return cons of inside-bounds of the markdown quote pair containing POS.
+The car is the position right after the opening DELIMITER; the cdr is
+the position right before the closing DELIMITER.  For an empty pair
+\(adjacent delimiters) both bounds coincide, so CAR = CDR.  POS on
+either delimiter counts as inside.  Return nil if POS is not inside
+such a pair.
 
-Move pointer and modify the match data."
-  (let ((delimiter (or delimiter "`"))
-        (bol (or beg
-                 (progn (goto-char pos) (line-beginning-position))))
-        (eol (or end
-                 (progn (goto-char pos) (line-end-position))))
-        (found nil))
-    (goto-char bol)
-    (while (and (search-forward delimiter eol t) (not found))
-      (let ((start (match-beginning 0)))
-        (when (search-forward delimiter eol t)
-          (let ((end (match-end 0)))
-            (when (and (>= pos start)
-                       (< pos end))
-              (setq found t))))))
-    found))
+If BEG END are not provided, look for DELIMITER at the current line only.
+DELIMITER must be a non-empty string (\"`\" or \"```\"), defaults to \"`\".
+
+Point is moved and match data is modified as a side effect."
+  (let ((delimiter (or delimiter "`")))
+    (when (> (length delimiter) 0)
+      (let ((bol (or beg (progn (goto-char pos)
+                                (line-beginning-position))))
+            (eol (or end (progn (goto-char pos)
+                                (line-end-position))))
+            (result nil))
+        (goto-char bol)
+        (while (and (search-forward delimiter eol t) (not result))
+          (let ((start (match-beginning 0))
+                (open-end (match-end 0)))
+            (when (search-forward delimiter eol t)
+              (let ((close-beg (match-beginning 0)))
+                (when (and (>= pos start) (< pos (match-end 0)))
+                  (setq result (cons open-end
+                                     (max open-end  close-beg))))))))
+        result))))
+
 
 (defun cui-block--markdown-quotes-p (pos)
   "Return t if POS is inside any markdown backquote block at line.
 on the current line.
 \(`...` or ```...```\) on current line or at quote itself.
+If pos at quite it will be found too.
 
 Modify the match data."
   (save-excursion
     (or (cui-block--markdown-quotes-at-line-p pos "`")
         (cui-block--markdown-quotes-at-line-p pos "```"))))
 
-;; (defun cui-block--markdown-quotes-at-line-p (pos &optional delimiter beg end)
-;;   (goto-char pos)
-;;   (if (string-equal delimiter "`")
-;;       (org-in-regexp "`[^`\n]+`" 0)
-;;     (org-in-regexp "^```[^\n]*\n\\(?:.*\n\\)*?```" 0)))
-
-;; (defun cui-block--markdown-quotes-p (pos)
-;;   "Return non-nil if POS is inside markdown code (inline ` or ```fence```).
-;; Includes the delimiter characters themselves."
-;;   (save-excursion
-;;     (goto-char pos)
-;;     (or (org-in-regexp "`[^`\n]+`" 100)
-;;         (org-in-regexp "^```[^\n]*\n\\(?:.*\n\\)*?```" 100))))
 
 ;; -=-= Markdown - block - fix indentation
 
@@ -854,7 +889,6 @@ Modify current buffer."
                          (min (+ (point) min-indent) (line-end-position)))
           (forward-line 1)
           (setq n (1- n)))))))
-
 
 
 ;; -=-= Markdown - block - compose
@@ -949,7 +983,6 @@ Cursors should be at header."
                             (move-beginning-of-line 1)
                             (not (cui-block--markdown-block-p)))))
            found)
-
 
       (cui--debug "cui-block--markdown-heading-end-of-subtree reverse=%s current-level=%s lim=%s"
                   reverse current-level lim)
@@ -1392,113 +1425,160 @@ ARG should be positive number or nil."
 
 ;; -=-= Interactive: mark-at-point
 
+(defun cui-block--activate-region (beg end)
+  "Deactivate mark, move point to BEG, and set mark at END.
+Single place for the repeated mark/point triad."
+  (deactivate-mark)
+  (goto-char beg)
+  (set-mark end))
+
+
+(defun cui-block-mark-step-word (pos _block-beg _block-end)
+  "Mark the word at POS using cui word separators.
+Separators: whitespace, `>', `**', `__'.
+
+Special constructs in `quote', `chat-prefix-line', `link', and
+`bold' are checked first via `cui-block--at-special-p'; a match
+returns its span as a list.  Otherwise falls back to
+separator-delimited word scanning.
+
+Returns nil when point sits on a separator or immediately after
+a `**'/`__' pair and no special construct matched."
+  (let ((sep "\\(?:[[:space:]>]\\|\\*\\*\\|__\\)"))
+    (let ((quotes (cui-block--markdown-quotes-p pos)))
+      (if quotes
+          (list (car quotes) (cdr quotes))
+        (let ((special (cui-block--at-special-p
+                        pos '(quote chat-prefix-line link bold))))
+          (if special
+              (list (car special) (cdr special))
+            (goto-char pos)
+            (unless (or (looking-at-p sep)
+                        (and (> pos (point-min))
+                             (save-excursion
+                               (goto-char (1- pos))
+                               (looking-at-p "\\(?:\\*\\*\\|__\\)"))))
+              (message "Word")
+              (list (save-excursion
+                      (goto-char pos)
+                      (if (re-search-backward sep nil t)
+                          (match-end 0)
+                        (point-min)))
+                    (save-excursion
+                      (goto-char pos)
+                      (if (re-search-forward sep nil t)
+                          (match-beginning 0)
+                        (point-max)))))))))))
+
+
+(defun cui-block-mark-step-org-element (pos _block-beg _block-end)
+  "Step 0: Org element, unless a markdown block is smaller.
+Argument POS is position where to find."
+  (let* ((reg (cui-block--markdown-block-p))
+         (block-size (when reg (- (cdr reg) (car reg)))))
+    (deactivate-mark)
+    (goto-char pos)
+    (message "Org Element")
+    (org-mark-element)
+    (if (and block-size
+             (> (- (region-end) (region-beginning)) block-size))
+        nil
+      (list (region-beginning) (region-end)))))
+
+(defun cui-block-mark-step-markdown-content (_pos block-beg block-end)
+  "Step 1: Markdown block content.
+Argument BLOCK-BEG is CUI block beg.
+Argument BLOCK-END is CUI block end."
+  (message "MBlock content")
+  (when-let* ((rng1 (cui-block--markdown-block-p block-beg block-end))
+              (rng2 (cui-block--markdown-block-content-range
+                     (car rng1) (cdr rng1))))
+    (list (car rng2) (cdr rng2))))
+
+(defun cui-block-mark-step-markdown-with-header (_pos block-beg block-end)
+  "Step 2: Markdown block with header and footer.
+Argument BLOCK-BEG is CUI block beg.
+Argument BLOCK-END is CUI block end."
+  (message "MBlock with header")
+  (let ((rng (cui-block--markdown-block-p block-beg block-end)))
+    (when rng
+      (list (car rng)
+            (progn (goto-char (cdr rng)) (line-end-position))))))
+
+(defun cui-block-mark-step-chat-message (_pos _block-beg _block-end)
+  "Step 3: Chat message at point."
+  (message "Chat message")
+  (cui-block-mark-chat-message-at-point)
+  (list (region-beginning) (region-end)))
+
+(defun cui-block-mark-step-block-content (_pos _block-beg _block-end)
+  "Step 4: Block content region."
+  (message "Block content")
+  (let ((reg (cui-block--contents-region)))
+    (when reg (list (car reg) (cdr reg)))))
+
+(defun cui-block-mark-step-whole-block (_pos block-beg block-end)
+  "Step 5: Whole cui block.
+Argument BLOCK-BEG is CUI block beg.
+Argument BLOCK-END is CUI block end."
+  (message "Block whole")
+  (list block-beg block-end))
+
+
 (defun cui-block-mark-at-point-by-steps ()
   "Progressively mark a larger region in cui block at point.
-Steps:
-  0. Org element
-  1. Markdown block
-  2. Markdown block with header
-  3. Chat message
-  4. Block content
-  5. Whole block.
-If ARG optional universal argument is non-nil, then we select message of
- chat strictly.
-Return number of marked content."
+
+The sequence of steps is controlled by `cui-block-mark-steps', an
+ordered list of functions; each takes POS, BLOCK-BEG, BLOCK-END and
+returns (BEG END) or nil.
+
+When a region is already active, the org-element step (if first) is
+skipped so marking starts from the next step.
+Return (PREV-INDEX INDEX)."
   (interactive)
   (let ((pos (point))
         (expanded nil)
-        (cur-size (if (use-region-p) (- (region-end) (region-beginning)) 0))
+        (cur-size (if (use-region-p)
+                      (- (region-end) (region-beginning))
+                    0))
         (inx 0)
         (prev-inx 0)
         found-beg found-end
-        step)
+        step
+        (steps cui-block-mark-steps))
     (save-mark-and-excursion
       (when-let* ((block-region (cui-block--region))
                   (block-beg (car block-region))
                   (block-end (cdr block-region))
-                  ;; (mark-markdown
-                  ;;  (lambda ()
-                  ;;    (message "MBlock")
-                  ;;    (let ((res (cui-block--markdown-area (point) block-beg block-end)))
-                  ;;      (cons (car res) (cdr res))))) ; beg-cont end-cont
-                  (steps
-                   (list
-                    ;; Step 0: Org element
-                    (lambda ()
-                      ;; Additionally check if point is in markdown block
-                      ;; that element is less than block.
-                      (let* ((reg (cui-block--markdown-block-p))
-                             (block-size (when reg (- (car reg) (cdr reg))))) ; may be nil
-                        (deactivate-mark)
-                        (goto-char pos)
-                        ;; (ignore-errors                    ;; wrong-type-argument number-or-marker-p nil) at begining of the buffer.
-                        (message "Org Element")
-                        (org-mark-element)
-                        (if (and block-size (> (- (region-end) (region-beginning)) block-size))
-                            nil
-                          ;; else
-                          (list (region-beginning) (region-end)))))
-                    ;; Step 1: Markdown block
-                    (lambda ()
-                      (message "MBlock content")
-                      (when-let* ((rng1 (cui-block--markdown-block-p block-beg block-end))
-                                  (rng2 (cui-block--markdown-block-content-range (car rng1) (cdr rng1))))
-                        ;; (print (list rng1 (car rng1) (cdr rng1) rng2))
-                        (list (car rng2) (cdr rng2))))
-
-                    ;; Step 2: Markdown block with header and footer
-                    (lambda ()
-                      (message "MBlock with header")
-                      (let ((rng (cui-block--markdown-block-p block-beg block-end)))
-                        (when rng
-                          (list (car rng) (progn (goto-char (cdr rng)) (line-end-position))))))
-                    ;; Step 3: Chat message
-                    (lambda ()
-                      (message "Chat message")
-                      (cui-block-mark-chat-message-at-point)
-                      (list (region-beginning) (region-end)))
-                    ;; Step 4: Block content
-                    (lambda ()
-                      (message "Block content")
-                      (let ((reg (cui-block--contents-region)))
-                        (when reg
-                          (list (car reg) (cdr reg)))))
-                    ;; Step 5: Block whole
-                    (lambda () (message "Block whole") (list block-beg block-end)))))
-
-        ;; Step sequentially
-        (when (region-active-p) (setq inx 1)) ; skip org element if region active.
-        (while (and (< inx 6)
+                  (nsteps (length steps)))
+        ;; Skip first step if we already mark something.
+        (when (region-active-p) (setq inx 1))
+        (while (and (< inx nsteps)
                     (not expanded))
           (setq step (nth inx steps))
           (setq inx (1+ inx))
-
           (deactivate-mark)
           (goto-char pos)
-          (when-let* ((reg (funcall step))
+          (when-let* ((reg (funcall step pos block-beg block-end))
                       (beg (car reg))
                       (end (cadr reg))
                       (new-size (- end beg)))
             (when (<= new-size cur-size)
               (setq prev-inx (1- inx)))
-            ;; Compare new region size
-            (cui--debug "cui-block-mark-at-point %s %s %s %s" inx reg (when beg (- end beg)) cur-size)
+            (cui--debug "cui-block-mark-at-point %s %s %s %s"
+                        inx reg new-size cur-size)
             (when (and beg end
                        (> new-size cur-size)
-                       (> new-size (1+ cur-size))) ; and more than one character (it is new line between MBlock and chat message
-              (goto-char beg)
-              (set-mark end)
-
+                       (> new-size (1+ cur-size)))
+              (cui-block--activate-region beg end)
               (setq expanded t
-                    cur-size (- end beg)
+                    cur-size new-size
                     found-beg beg
                     found-end end))))))
-    ;; If nothing expanded, just mark whole block
     (when expanded
-      (deactivate-mark)
-      (goto-char found-beg)
-      (set-mark found-end))
+      (cui-block--activate-region found-beg found-end))
     (list prev-inx inx)))
+
 
 (defun cui-block-mark-at-point (&optional arg)
   "Should be called at cui block.
@@ -1518,8 +1598,7 @@ If universal argument ARG is non-nil, mark content of cui block."
           (let* ((reg (cui-block--region))
                  (beg (car reg))
                  (end (cdr reg)))
-            (goto-char beg)
-            (set-mark end)
+            (cui-block--activate-region beg end)
             (message "Block whole")))
          ;; at message
          ((save-excursion
@@ -1531,12 +1610,11 @@ If universal argument ARG is non-nil, mark content of cui block."
           (cui-block-mark-at-point-by-steps))) ; without arg
       ;; else - with arg
       (let* ((reg (cui-block--contents-region))
-            (beg (car reg))
-            (end (cdr reg)))
-        (goto-char beg)
+             (beg (car reg))
+             (end (cdr reg)))
         (unless (eq beg end)
           (setq end (1- end)))
-        (set-mark end))
+        (cui-block--activate-region beg end))
       (message "Block content"))))
 
 
