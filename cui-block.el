@@ -691,9 +691,9 @@ on POS's line.  Point and match data are modified as a side effect."
           (goto-char pos)
           (beginning-of-line)
           (let ((beg (point)) (end (line-end-position)))
-            (cond ((and (memq 'quote what) (looking-at "^\\s-*> "))       (cons beg end))
+            (cond ((and (memq 'quote what) (looking-at "^\\s-*> "))       (cons (match-end 0) end))
                   ((and (memq 'chat-prefix-line what)
-                        (looking-at cui-block--chat-prefixes-re))         (cons beg end))
+                        (looking-at cui-block--chat-prefixes-re))         (cons beg (match-end 0)))
                   ((and (memq 'table what)
                         (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*"))       (cons beg end))))))))
 
@@ -729,7 +729,7 @@ Move pointer and modify the match data."
 
 
 (defun cui-block--markdown-block-p (&optional limit-start limit-end regions)
-  "Return (cons beg end) if current line is inside markdown block.
+  "Return (cons beg end) if current line is inside markdown block or nil.
 Execution in not `org-mode' is supported.
 If POS is not provided current cursor position is used.
 LIMIT-START and LIMIT-END are parameters for
@@ -1588,26 +1588,31 @@ If universal argument ARG is non-nil, mark content of cui block."
   (interactive "P")
   (if (region-active-p)
       (cui-block-mark-at-point-by-steps)
-    ;; else
+    ;; else - no region
     (if (not arg)
-        (cond
-         ;; at header
-         ((save-excursion
-            (move-beginning-of-line 1)
-            (looking-at cui-block--cui-block-begin-end-re))
-          (let* ((reg (cui-block--region))
-                 (beg (car reg))
-                 (end (cdr reg)))
-            (cui-block--activate-region beg end)
-            (message "Block whole")))
-         ;; at message
-         ((save-excursion
-            (move-beginning-of-line 1)
-            (looking-at cui-block--chat-prefixes-re))
-          (message "Chat message")
-          (cui-block-mark-chat-message-at-point))
-         (t
-          (cui-block-mark-at-point-by-steps))) ; without arg
+        (let ((pos (point)))
+          (move-beginning-of-line 1)
+          (cond
+           ;; at cui beg
+           ((looking-at cui-block--cui-block-begin-end-re)
+            (let* ((reg (cui-block--region))
+                   (beg (car reg))
+                   (end (cdr reg)))
+              (message "Block whole")
+              (cui-block--activate-region beg end)))
+           ;; at message prefix
+           ((looking-at cui-block--chat-prefixes-re)
+            (message "Chat message")
+            (cui-block-mark-chat-message-at-point))
+           ;; at markdown block header
+           ((let ((block (save-excursion (cui-block--markdown-block-p))))
+              (when (and block (= (car block) (point)))
+                (cui-block--activate-region (car block) (cdr block))
+                (message "Markdown block")
+                t)))
+           (t
+            (goto-char pos)
+            (cui-block-mark-at-point-by-steps)))) ; without arg
       ;; else - with arg
       (let* ((reg (cui-block--contents-region))
              (beg (car reg))
