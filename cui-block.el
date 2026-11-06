@@ -1309,32 +1309,6 @@ Return line begining positions of first line of content, roles,
           (setq last-beg (point)))))
     (cons last-beg last-end)))
 
-;; -=-= Interactive: mark-at-point
-
-(defun cui-block-mark-last-region ()
-  "Mark the last prompt in an cui block."
-  (interactive)
-  (when (cui-block-p)
-    (let* ((regions (reverse (cui-block--chat-role-regions)))
-           (last-region-end (pop regions))
-           (last-region-start (pop regions)))
-      (goto-char last-region-end)
-      (push-mark last-region-start t t))))
-
-
-(defun cui-block-mark-chat-message-at-point ()
-  "Mark the prompt at point: [ME:], [AI:]."
-  (interactive)
-  (when (cui-block-p)
-    (when-let* ((regions (cui-block--chat-role-regions))
-                (reg (car (cui-block--find-region-with-position regions (point))))
-                (beg (car reg))
-                (end (cdr reg)))
-      (unless (region-active-p)
-        (goto-char beg)
-        (push-mark end t t)
-        reg))))
-
 ;; -=-= Interactive: jump forward/backward
 
 (defun cui-block--find-next-prev-region (&optional direction current-point regions)
@@ -1455,14 +1429,22 @@ ARG should be positive number or nil."
   (interactive "^p")
   (cui-block-next-item (- (or arg 1))))
 
-;; -=-= Interactive: mark-at-point
+;; -=-= Interactive: mark-at-point - steps
 
-(defun cui-block--activate-region (beg end)
-  "Deactivate mark, move point to BEG, and set mark at END.
-Single place for the repeated mark/point triad."
-  (deactivate-mark)
-  (goto-char beg)
-  (set-mark end))
+(defun cui-block-mark-chat-message-at-point ()
+  "Mark the prompt at point: [ME:], [AI:].
+Used in `cui-block-mark-step-chat-message' and in
+ `cui-block-mark-at-point'."
+  (interactive)
+  (when (cui-block-p)
+    (when-let* ((regions (cui-block--chat-role-regions))
+                (reg (car (cui-block--find-region-with-position regions (point))))
+                (beg (car reg))
+                (end (cdr reg)))
+      (unless (region-active-p)
+        (goto-char beg)
+        (push-mark end t t)
+        reg))))
 
 
 (defun cui-block-mark-step-word (pos _block-beg _block-end)
@@ -1474,35 +1456,50 @@ Special constructs in `quote', `chat-prefix', `link', `latex' and
 returns its span as a list.  Otherwise falls back to
 separator-delimited word scanning.
 
+Called as a first step in `cui-block-mark-at-point-by-steps' and
+
 Returns nil when point sits on a separator or immediately after
 a `**'/`__' pair and no special construct matched."
-  (let ((sep "\\(?:[[:space:]>]\\|\\*\\*\\|__\\)"))
-    (let ((quotes (cui-block--markdown-quotes-p pos)))
-      (if quotes
-          (list (car quotes) (cdr quotes))
-        (let ((special (cui-block--at-special-p
-                        pos '(quote chat-prefix link latex bold))))
-          (if special
-              (progn (message "Word")
-                     (list (car special) (cdr special)))
-            ;; else
-            (goto-char pos)
-            (unless (or (looking-at-p sep)
-                        (and (> pos (point-min))
-                             (save-excursion
-                               (goto-char (1- pos))
-                               (looking-at-p "\\(?:\\*\\*\\|__\\)"))))
-              (message "Word")
-              (list (save-excursion
-                      (goto-char pos)
-                      (if (re-search-backward sep nil t)
-                          (match-end 0)
-                        (point-min)))
-                    (save-excursion
-                      (goto-char pos)
-                      (if (re-search-forward sep nil t)
-                          (match-beginning 0)
-                        (point-max)))))))))))
+  (message "Word")
+  (cond
+   ((let ((quotes (cui-block--markdown-quotes-p pos)))
+      (when quotes
+        (list (car quotes) (cdr quotes)))))
+
+   ((let ((special (cui-block--at-special-p pos '(quote chat-prefix link latex bold))))
+      (when special
+        (list (car special) (cdr special)))))
+
+   ((let ((sep "\\(?:[[:space:]>]\\|\\*\\*\\|__\\)"))
+      (goto-char pos)
+      (when (or (looking-at-p sep)
+                (and (> pos (point-min))
+                     (save-excursion
+                       (goto-char (1- pos))
+                       (looking-at-p "\\(?:\\*\\*\\|__\\)"))))
+        (when-let* ((beg (progn
+                           (goto-char pos)
+                           (when (re-search-backward sep nil t)
+                             (match-end 0))))
+                    (end (progn
+                           (goto-char pos)
+                           (when (re-search-forward sep nil t)
+                             (match-beginning 0)))))
+          (when (not (= beg end))
+            (list beg end))))))
+
+   (t (unless (and (goto-char pos)
+                   (not (eobp))
+                   (string-match-p "\\`[[:space:]]\\'" (char-to-string (char-after)))) ; not at space
+        (list (progn
+                (goto-char pos)
+                (unless (bolp)
+                  (backward-word))
+                (point))
+              (progn
+                (goto-char pos)
+                (forward-word)
+                (point)))))))
 
 
 (defun cui-block-mark-step-org-element (pos _block-beg _block-end)
@@ -1559,12 +1556,23 @@ Argument BLOCK-END is CUI block end."
   (list block-beg block-end))
 
 
+;; -=-= Interactive: mark-at-point - by-steps
+;;
+(defun cui-block--activate-region (beg end)
+  "Deactivate mark, move point to BEG, and set mark at END.
+Single place for the repeated mark/point triad.
+Return nil."
+  (deactivate-mark)
+  (goto-char beg)
+  (set-mark end))
+
+
 (defun cui-block-mark-at-point-by-steps ()
   "Progressively mark a larger region in cui block at point.
 
 The sequence of steps is controlled by `cui-block-mark-steps', an
 ordered list of functions; each takes POS, BLOCK-BEG, BLOCK-END and
-returns (BEG END) or nil.
+returns (BEG END).
 
 When a region is already active, the org-element step (if first) is
 skipped so marking starts from the next step.
@@ -1593,7 +1601,7 @@ Return (PREV-INDEX INDEX)."
           (setq inx (1+ inx))
           (deactivate-mark)
           (goto-char pos)
-          (when-let* ((reg (funcall step pos block-beg block-end))
+          (when-let* ((reg (funcall step pos block-beg block-end)) ; may return nil
                       (beg (car reg))
                       (end (cadr reg))
                       (new-size (- end beg)))
@@ -1613,48 +1621,51 @@ Return (PREV-INDEX INDEX)."
       (cui-block--activate-region found-beg found-end))
     (list prev-inx inx)))
 
+;; -=-= Interactive: mark-at-point - main
 
 (defun cui-block-mark-at-point (&optional arg)
-  "Should be called at cui block.
-If region is not active, check if point at message or at cui block header
- and mark it.
+  "Decide what to mark based on current position.
+`cui-block-mark-at-point-by-steps' mark word if regions is not active.
+This function add logic to check current position of point if region is
+ not active.
+Should be called at cui block.
 If universal argument ARG is non-nil, mark content of cui block."
   (interactive "P")
-  (if (region-active-p)
-      (cui-block-mark-at-point-by-steps)
-    ;; else - no region
-    (if (not arg)
-        (let ((pos (point)))
-          (move-beginning-of-line 1)
-          (cond
-           ;; at cui beg
-           ((looking-at cui-block--cui-block-begin-end-re)
-            (let* ((reg (cui-block--region))
-                   (beg (car reg))
-                   (end (cdr reg)))
-              (message "Block whole")
-              (cui-block--activate-region beg end)))
-           ;; at message prefix
-           ((looking-at cui-block--chat-prefixes-re)
-            (message "Chat message")
-            (cui-block-mark-chat-message-at-point))
-           ;; at markdown block header
-           ((let ((block (save-excursion (cui-block--markdown-block-p))))
-              (when (and block (= (car block) (point)))
-                (cui-block--activate-region (car block) (cdr block))
-                (message "Markdown block")
-                t)))
-           (t
-            (goto-char pos)
-            (cui-block-mark-at-point-by-steps)))) ; without arg
-      ;; else - with arg
-      (let* ((reg (cui-block--contents-region))
-             (beg (car reg))
-             (end (cdr reg)))
-        (unless (eq beg end)
-          (setq end (1- end)))
-        (cui-block--activate-region beg end))
-      (message "Block content"))))
+  (let ((element (cui-block-p)))
+    (when element
+      (if (region-active-p)
+          (cui-block-mark-at-point-by-steps)
+        ;; else
+        (when-let* ((bregion (cui-block--region element))
+                    (bbeg (car bregion))
+                    (bend (cdr bregion))
+                    (pos (point)))
+          (if arg
+              ;; - mark block content
+              (when-let* ((reg (funcall #'cui-block-mark-step-block-content nil nil nil))
+                          (beg (car reg))
+                          (end (cadr reg)))
+                (cui-block--activate-region beg end))
+            ;; else - check position - at line begin
+            (move-beginning-of-line 1)
+            (cond
+             ;; at cui block header
+             ((looking-at cui-block--cui-block-begin-end-re)
+              (cui-block--activate-region bbeg bend)
+              (message "Block whole"))
+             ;; at message prefix
+             ((looking-at cui-block--chat-prefixes-re)
+              (cui-block-mark-chat-message-at-point)
+              (message "Chat message"))
+             ;; at markdown block header
+             ((when-let* ((reg (funcall #'cui-block-mark-step-markdown-content nil nil nil))
+                          (beg (car reg))
+                          (end (cadr reg)))
+                (cui-block--activate-region beg end)
+                t))
+             (t
+              (goto-char pos)
+              (cui-block-mark-at-point-by-steps)))))))))
 
 
 ;; -=-= fn: set-block-parameter

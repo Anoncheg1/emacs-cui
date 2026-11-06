@@ -164,6 +164,7 @@
 ;;  suite for this
 ;; - make org-to-markdown as a separage file.
 ;; - Implement  Agent Client Protocol (ACP) and Websocket
+;; - expanding @tags should be optional.
 
 ;;; Code:
 

@@ -31,9 +31,9 @@ Protocol: “OpenAI like” HTTP REST API. (url.el)
 [[https://raw.githubusercontent.com/Anoncheg1/public-share/main/oai.png]]
 
 * Prerequisites
-Emacs 29.1+, 30.2
+Emacs 29.1+, 31.1
 
-Token API for remote LLMs.
+Token API for remote LLMs or HTTP access point for local LLM.
 
 Optional: ~org-links~, available at MELA and at https://github.com/Anoncheg1/emacs-org-links
 
