@@ -175,47 +175,56 @@ except `#' which counts as a word character."
 
 
 (defun cui-optional--classify-hyphen (&optional pos)
-  "Classify hyphen at POS.
-Return `en-dash', `em-dash', or nil for no change."
-  ;; 1) check by first character before and after hyphen
-  (let ((pos (or pos (point))))
-    (let ((l (char-before pos))
-          (r (char-after (1+ pos))))
-      (let ((l-space (memq l '(?\s ?\t)))
-            (r-space (memq r '(?\s ?\t))))
-        ;; (print (list l-space r-space)))))
-        (unless (save-excursion
-                  (goto-char pos)
-                  (skip-chars-backward "[:blank:]" (line-beginning-position))
-                  (bolp))
-          (cond
-           ((and l-space r-space) 'em-dash) ; sentences separator
-           ((and l r (not l-space) (not r-space) ; not spaces
-                 (or (and (cl-digit-char-p l) (cl-digit-char-p r))
-                     ;; 2) check by two words before and after hyphen
-                     (let ((sep "^[:alnum:]#_")   ; matches separators (non-word chars)
-                           (word "[:alnum:]#_"))  ; matches word chars
-                       (let ((before
-                              (save-excursion
-                                (goto-char pos)
-                                (skip-chars-backward sep)
-                                (let ((end (point)))
-                                  (skip-chars-backward word)
-                                  (when (< (point) end)
-                                    (buffer-substring-no-properties (point) end)))))
-                             (after
-                              (save-excursion
-                                (goto-char pos)
-                                (skip-chars-forward sep)
-                                (let ((start (point)))
-                                  (skip-chars-forward word)
-                                  (when (< start (point))
-                                    (buffer-substring-no-properties start (point)))))))
-                         (and before after
-                              (cui-optional--hex-expression-p before)
-                              (cui-optional--hex-expression-p after))))
-                     ;; (and (>= l ?A) (<= l ?Z) (>= r ?A) (<= r ?Z))
-                     ) 'en-dash))))))))
+  "Classify the hyphen at POS (default `point').
+POS is the position OF the hyphen, not after it.
+
+Return `em-dash', `en-dash', or nil (leave unchanged).
+Rules:
+  * \" - \" (blanks on both sides)          -> em-dash
+  * digit-hyphen-digit (\"10-20\")          -> en-dash
+  * hex-hyphen-hex (\"0xFF-0x1F\", \"a1-b2\") -> en-dash
+  * line-leading hyphen (list bullet)     -> nil
+  * anything else                         -> nil
+
+Works outside `org-mode' too."
+  (let* ((pos (or pos (point)))
+         (l   (char-before pos))
+         (r   (char-after (1+ pos)))
+         (lsp (memq l '(?\s ?\t)))
+         (rsp (memq r '(?\s ?\t)))
+         ;; `skip-chars-*' has no POSIX-class support: use an explicit set.
+         (wc  "a-zA-Z0-9_#"))
+    (cond
+     ;; List bullet / leading dash: leave alone.
+     ((save-excursion (goto-char pos) (forward-line 0)
+                      (skip-chars-forward " \t")
+                      (eq (point) pos))
+      nil)
+
+     ;; " - " -> em-dash.
+     ((and lsp rsp) 'em-dash)
+
+     ;; Both neighbours are digits -> numeric range.
+     ((and l r (cl-digit-char-p l) (cl-digit-char-p r)) 'en-dash)
+
+     ;; Both neighbours are part of hex-like tokens, and at least one
+     ;; side is not a plain alphabetic word (so "a-b"/"well-known"
+     ;; stay hyphens while "a1-b2"/"0xFF-0x1F"/"dead-beef" become
+     ;; en-dashes).
+     ((and l r (not lsp) (not rsp)
+           (let ((before (save-excursion
+                           (goto-char pos) (skip-chars-backward wc)
+                           (buffer-substring-no-properties (point) pos)))
+                 (after  (save-excursion
+                           (goto-char (1+ pos)) (skip-chars-forward wc)
+                           (buffer-substring-no-properties (1+ pos) (point)))))
+             (and (cui-optional--hex-expression-p before)
+                  (cui-optional--hex-expression-p after)
+                  (not (and (string-match-p "\\`[a-zA-Z]+\\'" before)
+                            (string-match-p "\\`[a-zA-Z]+\\'" after))))))
+      'en-dash)
+
+     (t nil))))
 
 
 (defun cui-optional-markdown-blocks-correct-dashes-hook-function (beg end)
@@ -234,15 +243,17 @@ Arguments BEG END described in`cui-before-send-hook' hook."
       (goto-char beg)
       (while (re-search-forward "-" end t)
         (let ((pos (1- (point))))
-          (unless (or (cui-block--markdown-quotes-p (point))
-                      (save-excursion (cui-block--in-regexp org-link-any-re))
-                      (save-excursion (cui-block--markdown-block-p beg end regions))) ; use regions for speed
+          (unless (save-excursion (or (cui-block--markdown-quotes-p pos)
+                                      (cui-block--at-special-p pos '(table quote chat-prefix link latex))
+                                      (progn
+                                        (goto-char pos)
+                                        (cui-block--markdown-block-p beg end regions)))) ; use regions for speed
             ;; - en-dash - should be between two characters
             ;; - em-dash - should be surounded with spaces
             ;; both should not be at the begining of line or with just spaces before them. (maybe not needed to chech)
             (pcase (cui-optional--classify-hyphen pos)
               ('en-dash (push (cons pos ?–) changes))
-              ('em-dash (push (cons pos ?—) changes))))))
+              ('em-dash (push (cons pos ?—) changes)))))) ; maybe better ":" instead?
       ;; Pass 2: apply from the end so earlier positions stay valid.
       (dolist (c (sort changes (lambda (a b) (> (car a) (car b)))))
         (goto-char (car c))
@@ -320,7 +331,6 @@ Expands the boundaries to encompass the full \='cui-markdown-invisible
       ;; (put-text-property from to 'cui-markdown-invisible nil)
       ;; (put-text-property from to 'invisible nil)
       (font-lock-flush from to))))
-
 
 
 (defun cui-optional--region-has-hidden-subregions-p (from to)
@@ -453,6 +463,7 @@ TODO: May cause error at `org-element--parse-to' at `re-search-forward'."
 
 
 ;; -=-= Quite region or word at postion
+
 (defun cui-optional-quote-word-or-region ()
   "Quote word at point (via `cui-block-mark-step-word') with backticks.
 If region is active and on a single line, quote the region instead.

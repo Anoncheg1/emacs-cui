@@ -858,10 +858,11 @@ Point is moved and match data is modified as a side effect."
 (defun cui-block--markdown-quotes-p (pos)
   "Return t if POS is inside any markdown backquote block at line.
 on the current line.
+Execution in not `org-mode' is supported.
 \(`...` or ```...```\) on current line or at quote itself.
 If pos at quite it will be found too.
 
-Modify the match data."
+Move pointer and modify the match data as a side effect."
   (save-excursion
     (or (cui-block--markdown-quotes-at-line-p pos "`")
         (cui-block--markdown-quotes-at-line-p pos "```"))))
