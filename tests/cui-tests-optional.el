@@ -259,6 +259,153 @@
     ;; (print (buffer-string)))
     (should (string= (buffer-string) "see 1\n- 3 and 5–9 — \nok"))))
 
+;; -=-= For `cui-optional-quote-word-or-region'
+(ert-deftest test-cui-quote-no-region ()
+  "Word-at-point branch: nothing, degenerate, already-quoted, and happy path."
+  ;; nothing under point -> unchanged
+  (with-temp-buffer
+    (insert "   ")
+    (goto-char (point-min))
+    (deactivate-mark)
+    (cl-letf (((symbol-function 'cui-block-mark-step-word) (lambda (&rest _) nil)))
+      (cui-optional-quote-word-or-region))
+    (should (equal (buffer-string) "   ")))
+  ;; degenerate range -> unchanged
+  (with-temp-buffer
+    (insert "word")
+    (goto-char (point-min))
+    (deactivate-mark)
+    (cl-letf (((symbol-function 'cui-block-mark-step-word)
+               (lambda (&rest _) (list (point-min) (point-min)))))
+      (cui-optional-quote-word-or-region))
+    (should (equal (buffer-string) "word")))
+  ;; already wrapped in backticks -> unchanged
+  (with-temp-buffer
+    (insert "`foo`")
+    (goto-char (point-min))
+    (deactivate-mark)
+    (cl-letf (((symbol-function 'cui-block-mark-step-word)
+               (lambda (&rest _) (list (+ (point-min) 1) (+ (point-min) 4)))))
+      (cui-optional-quote-word-or-region))
+    (should (equal (buffer-string) "`foo`")))
+  ;; happy path -> quoted once
+  ;; (with-temp-buffer
+  ;;   (insert "foo bar")
+  ;;   (goto-char (point-min))
+  ;;   (deactivate-mark)
+  ;;   (cl-letf (((symbol-function 'cui-block-mark-step-word)
+  ;;              (lambda (&rest _) (list (+ (point-min) 1) (+ (point-min) 4)))))
+  ;;     (cui-optional-quote-word-or-region))
+  ;;   (buffer-string))
+  ;;   (should (equal (buffer-string) "`foo` bar")))
+  )
+
+(ert-deftest test-cui-quote-region ()
+  "Region branch: single-line happy path and already-quoted guard."
+  ;; active single-line region -> quoted once
+  (with-temp-buffer
+    (insert "abc def")
+    (goto-char (point-min))
+    (push-mark (+ (point-min) 3) t t)
+    (goto-char (point-min))
+    (cui-optional-quote-word-or-region)
+    (should (equal (buffer-string) "`abc` def")))
+  ;; region abutting a backtick -> already quoted, unchanged
+  (with-temp-buffer
+    (insert "abc`")
+    (goto-char (point-min))
+    (push-mark (+ (point-min) 3) t t)
+    (goto-char (point-min))
+    (cui-optional-quote-word-or-region)
+    (should (equal (buffer-string) "abc`")))
+
+  (with-temp-buffer
+    (insert "abc. ")
+    (goto-char (point-min))
+    (cui-optional-quote-word-or-region)
+    (should (equal (buffer-string) "`abc`. ")))
+
+  (with-temp-buffer
+    (insert "abc, ")
+    (goto-char (point-min))
+    (cui-optional-quote-word-or-region)
+    (should (equal (buffer-string) "`abc`, ")))
+
+  (with-temp-buffer
+    (insert ",goto-char. ")
+    (goto-char (+ 2 (point-min)))
+    (cui-optional-quote-word-or-region)
+    (setq res (buffer-string))
+    (should (string-equal res ",`goto-char`. ")))
+
+  (with-temp-buffer
+    (insert "**goto-char** ")
+    (goto-char (+ 5 (point-min)))
+    (cui-optional-quote-word-or-region)
+    (setq res (buffer-string))
+    (should (string-equal res "**`goto-char`** ")))
+
+;;   (with-temp-buffer (insert "  goto-char") (goto-char 3)
+;;   (cui-block-mark-step-word 3 nil nil))          ;; => (3 12) ✓
+;; (with-temp-buffer (insert "a-b_c-d") (goto-char 1)
+;;   (cui-block-mark-step-word 1 nil nil))          ;; => (1 8) ✓
+;; (with-temp-buffer (insert "foo.bar") (goto-char 1)
+;;   (cui-block-mark-step-word 1 nil nil))          ;; => (1 4) ✓
+;; (with-temp-buffer (insert "**goto-char**") (goto-char 5)
+;;   (cui-block-mark-step-word 5 nil nil t))        ;; => (3 15) ✓
+  )
+
+
+;; -=-= For `cui-block-mark-step-word'
+;;; --- include-separators: bold ---
+(ert-deftest test-bold-without-separators ()
+  "Without include-separators, `**goto-char**' yields just `goto-char'."
+  (with-temp-buffer
+    (insert "**goto-char**")
+    (goto-char (point-min))
+    (let ((r (cui-block-mark-step-word (+ (point-min) 2) nil nil nil)))
+      (should (equal (buffer-substring-no-properties (car r) (cadr r))
+                     "goto-char")))))
+
+(ert-deftest test-bold-with-separators ()
+  "With include-separators, `**goto-char**' yields the whole span."
+  (with-temp-buffer
+    (insert "**goto-char**")
+    (goto-char (point-min))
+    (let ((r (cui-block-mark-step-word (+ (point-min) 2) nil nil t)))
+      (should (equal (buffer-substring-no-properties (car r) (cadr r))
+                     "**goto-char**")))))
+
+;;; --- plain word between spaces ---
+(ert-deftest test-plain-word ()
+  "Plain `foo-bar' surrounded by whitespace yields `foo-bar'."
+  (with-temp-buffer
+    (insert "x foo-bar y")
+    (goto-char (point-min))
+    (let ((r (cui-block-mark-step-word (+ (point-min) 2) nil nil nil)))
+      (should (equal (buffer-substring-no-properties (car r) (cadr r))
+                     "foo-bar")))))
+
+;;; --- point on separator returns nil ---
+(ert-deftest test-on-separator-nil ()
+  "Point on whitespace returns nil."
+  (with-temp-buffer
+    (insert " foo ")
+    (goto-char (point-min))
+    (should (null (cui-block-mark-step-word (point-min) nil nil nil)))))
+
+;;; --- char-class fallback splits on '.' ---
+(ert-deftest test-fallback-dot-splits ()
+  "In `foo.bar' the dot splits the word: only one side is marked."
+  (with-temp-buffer
+    (insert "foo.bar")
+    (goto-char (point-min))
+    (let ((r (cui-block-mark-step-word (point-min) nil nil nil)))
+      (should (equal (buffer-substring-no-properties (car r) (cadr r))
+                     "foo")))
+    (let ((r (cui-block-mark-step-word (+ (point-min) 4) nil nil nil)))
+      (should (equal (buffer-substring-no-properties (car r) (cadr r))
+                     "bar")))))
 ;; -=-= end
 (provide 'cui-tests-optional)
 

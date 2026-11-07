@@ -1692,8 +1692,10 @@ CUI mode) is never called."
   ""
   (with-temp-buffer
     (insert "probability that *at least one* is slow is \\(1 - 0.99^{100} \\approx 63\\%\\). This is the")
-    (should (equal (cui-block--at-special-p 48 '(latex)) '(43 . 76)))
-    (should-not (cui-block--at-special-p 42 '(latex)))))
+    (should (equal (cui-block--at-special-p 48 '(latex)) '(45 . 74)))
+    (should (equal (cui-block--at-special-p 48 '(latex) t) '(43 . 76)))
+    (should-not (cui-block--at-special-p 42 '(latex))))
+  )
 ;; -=-= Test: `cui-block--in-regexp'
 (ert-deftest cui-block--in-regexp-inside ()
   "Point inside a match returns its span."

@@ -117,6 +117,7 @@
 ;; - outline.el usage		https://github.com/Anoncheg1/emacs-outline-it
 ;; - Dates for Org-mode headers	https://github.com/Anoncheg1/emacs-org-history
 ;; - Fix tables copied from browser	https://github.com/Anoncheg1/emacs-org-tsv2markdown
+;; - TAB key reimplementation	https://github.com/Anoncheg1/emacs-indent
 
 ;;;; Donate:
 

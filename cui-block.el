@@ -149,6 +149,7 @@ TODO: for streaming: save and pass begining of paragraph or line."
 
 (defcustom cui-block-mark-steps
   '(cui-block-mark-step-word
+    cui-block-mark-step-word-with-separators
     cui-block-mark-step-org-element
     cui-block-mark-step-markdown-content
     cui-block-mark-step-markdown-with-header
@@ -657,11 +658,17 @@ Return nil if POS is not inside any match.  Point is preserved."
             (throw 'found (cons (match-beginning 0) (match-end 0)))))
         nil))))
 
-(defun cui-block--at-special-p (pos &optional what)
+
+(defun cui-block--at-special-p (pos &optional what with-surrounding)
   "Return non-nil if POS is inside or at a special block construct.
 WHAT is a symbol or list among `table', `quote', `link',
 `chat-prefix', `chat-prefix-line', `bold', and `latex'
 \(nil means all).
+WITH-SURROUNDING, when non-nil, returns the span including the
+surrounding delimiters (the default behavior).  When nil, returns
+the span of the inner content only, excluding the enclosing
+delimiters where applicable.
+
 Each matching clause returns a (BEG . END) cons; the first wins.
 `bold' returns the span of the innermost enclosing `**'/'***' pair
 on POS's line.  `latex' returns the span of an enclosing
@@ -679,30 +686,20 @@ Point and match data are modified as a side effect."
         (and (memq 'link what)
              (cui-block--in-regexp org-link-any-re pos))
         ;; LaTeX: multiline \\[ ... \\]  and  \\( ... \\)  (any number of
-        ;; lines), then inline \\( ... \\) on POS's line.  We search from
-        ;; the beginning of the buffer (bounded by point-max) so that an
-        ;; opener on an earlier line is found; we only accept a match
-        ;; whose BEG..END spans POS.
+        ;; lines), then inline \\( ... \\) on POS's line.
         (and (memq 'latex what)
              (let ((res nil))
-               ;; (goto-char beg)
-               ;; ;; (goto-char (point-min))
-               ;; ;; Multiline display: \[ ... \]
-               ;; (while (and (not res)
-               ;;             (re-search-forward
-               ;;              "^[\s-]*\\\\\\[\\(.\\|\n\\)*?\\\\\\]" eol t))
-               ;;   (when (and (<= (match-beginning 0) pos)
-               ;;              (>= (match-end 0) pos))
-               ;;     (setq res (cons (match-beginning 0) (match-end 0)))))
-               ;; Multiline / inline \( ... \)  (spanning newlines)
                (goto-char beg)
                (while (and (not res)
-                           ;; (]\\\\\(.*\\\\\)[^\\)
                            (re-search-forward
                             "[^\\(]\\\\\(.*\\\\\)[^\\)]" eol t))
                  (when (and (<= (match-beginning 0) pos)
                             (>= (match-end 0) pos))
-                   (setq res (cons (match-beginning 0) (match-end 0)))))
+                   (if with-surrounding
+                       (setq res (cons (match-beginning 0) (match-end 0)))
+                     ;; Trim the surrounding \\( and \\) delimiters
+                     (setq res (cons (+ (match-beginning 0) 2)
+                                     (- (match-end 0) 2))))))
                res))
         (and (memq 'bold what)
              (progn
@@ -710,21 +707,29 @@ Point and match data are modified as a side effect."
                (let ((stack nil) (result nil))
                  (while (and (not result)
                              (re-search-forward "\\(\\*\\{2,3\\}\\)" eol t))
-                   (let ((beg (match-beginning 0))
-                         (end (match-end 0))
+                   (let ((mbeg (match-beginning 0))
+                         (mend (match-end 0))
                          (len (length (match-string 1))))
                      (if (and stack (= (caar stack) len))
                          (let ((op (pop stack)))
-                           (when (and (<= (cdr op) pos) (>= beg pos))
-                             (setq result (cons (cdr op) end))))
-                       (push (cons len beg) stack))))
+                           (when (and (<= (cdr op) pos) (>= mbeg pos))
+                             (if with-surrounding
+                                 (setq result (cons (cdr op) mend))
+                               ;; Trim the ** or *** delimiters
+                               (setq result (cons (+ (cdr op) len)
+                                                  (- mend len))))))
+                       (push (cons len mbeg) stack))))
                  result)))
 
         (cond ((and (memq 'quote what) (looking-at "^\\s-*> "))
-               (cons (match-end 0) eol))
+               (if with-surrounding
+                   (cons beg eol)
+                 (cons (match-end 0) eol)))
               ((and (memq 'chat-prefix-line what)
                     (looking-at cui-block--chat-prefixes-re))
-               (cons beg (match-end 0)))
+               (if with-surrounding
+                   (cons beg (match-end 0))
+                 (cons (match-end 0) eol)))
               ((and (memq 'table what)
                     (looking-at "^[ \t]*\\(|\\|\\+-[-+]\\).*"))
                (cons beg eol))))))
@@ -1448,60 +1453,122 @@ Used in `cui-block-mark-step-chat-message' and in
         reg))))
 
 
-(defun cui-block-mark-step-word (pos _block-beg _block-end)
+(defvar cui-block-mark-word-chars "[:alnum:]_<>/@-")
+
+(defun cui-block-mark-step-word (pos _block-beg _block-end &optional include-separators)
   "Mark the word at POS using cui word separators.
-Separators: whitespace, `>', `**', `__'.
+Separators: whitespace, `>', `**', `__'.  Word characters are
+letters, digits, `_', `-', and common function-name punctuation
+\(but not `.', `,', or the separators above).
 
 Special constructs in `quote', `chat-prefix', `link', `latex' and
-`bold' are checked first via `cui-block--at-special-p'; a match
-returns its span as a list.  Otherwise falls back to
-separator-delimited word scanning.
+`bold' are checked first via `cui-block--at-special-p'.
 
-Called as a first step in `cui-block-mark-at-point-by-steps' and
+When INCLUDE-SEPARATORS is nil (the default), the buffer is
+narrowed to any detected special span and the word scan runs
+inside it, so the returned word excludes the surrounding
+delimiters (e.g. `**goto-char**' returns just `goto-char').
+
+When INCLUDE-SEPARATORS is non-nil, the full special span is
+returned as-is, i.e. the surrounding delimiters are kept
+\(e.g. `**goto-char**' returns the whole `**goto-char**').
 
 Returns nil when point sits on a separator or immediately after
 a `**'/`__' pair and no special construct matched."
   (message "Word")
-  (cond
-   ((let ((quotes (cui-block--markdown-quotes-p pos)))
-      (when quotes
-        (list (car quotes) (cdr quotes)))))
+  ;; Regexp / character-set definitions:
+  ;;   SEPS       -- delimiters that bound a word (whitespace, `>',
+  ;;                 `**', `__').
+  ;;   WORD-RE    -- one word character (used with `looking-at-p').
+  ;;   WORD-SKIP  -- same set, in `skip-chars-forward/backward' form
+  ;;                 (NO outer brackets, `-' last so it is literal).
+  (let ((seps '("[[:space:]]" ">" "\\*\\*" "__"))
+        (word-re (concat "[" cui-block-mark-word-chars "]"))
 
-   ((let ((special (cui-block--at-special-p pos '(quote chat-prefix link latex bold))))
-      (when special
-        (list (car special) (cdr special)))))
+        ;; (word-re "[[:alnum:]_!?=<>+*/&%$#:~^@'-]")
+        ;; (word-skip "[:alnum:]_!?=<>+*/&%$#:~^@'-")
+        (word-skip cui-block-mark-word-chars))
+    ;; Restrict all scanning below to the detected special span (if
+    ;; any), so the span's own delimiters never leak into the word.
+    (save-restriction
+      ;; Detect a markdown quote or any special construct (quote,
+      ;; chat-prefix, link, latex, bold).  SPAN is a cons (BEG . END)
+      ;; or nil.
+      (let* ((span-quotes (let ((q (cui-block--markdown-quotes-p pos)))
+                               (when q (cons (car q) (cdr q)))))
+            (span-special (cui-block--at-special-p pos '(quote chat-prefix link latex bold) include-separators))
+            (a (or span-quotes span-special))
+            (b (and span-quotes span-special))
+            (span (if (and a b)
+                      (let ((da (- (cdr a) (car a)))
+                            (db (- (cdr b) (car b))))
+                        (if include-separators
+                            (if (> da db) a b)
+                          (if (< da db) a b)))
+                    a)))
 
-   ((let ((sep "\\(?:[[:space:]>]\\|\\*\\*\\|__\\)"))
-      (goto-char pos)
-      (when (or (looking-at-p sep)
-                (and (> pos (point-min))
-                     (save-excursion
-                       (goto-char (1- pos))
-                       (looking-at-p "\\(?:\\*\\*\\|__\\)"))))
-        (when-let* ((beg (progn
-                           (goto-char pos)
-                           (when (re-search-backward sep nil t)
-                             (match-end 0))))
-                    (end (progn
-                           (goto-char pos)
-                           (when (re-search-forward sep nil t)
-                             (match-beginning 0)))))
-          (when (not (= beg end))
-            (list beg end))))))
+        (cond
+         ;; ---- Caller asked to keep the delimiters --------------------
+         ;; Return the raw special span as-is, e.g. `**goto-char**'.
+         (span (list (car span) (cdr span)))
 
-   (t (unless (and (goto-char pos)
-                   (not (eobp))
-                   (string-match-p "\\`[[:space:]]\\'" (char-to-string (char-after)))) ; not at space
-        (list (progn
-                (goto-char pos)
-                (unless (bolp)
-                  (backward-word))
-                (point))
-              (progn
-                (goto-char pos)
-                (forward-word)
-                (point)))))))
+         ;; ---- Default: strip the delimiters --------------------------
+         (t
+          ;; If a special span was found, narrow to it and clamp POS
+          ;; inside; otherwise scan the whole accessible buffer.
+          (when span
+            (narrow-to-region (car span) (cdr span))
+            (setq pos (max (point-min) (min pos (point-max)))))
+          (cond
+           ;; POS sits directly on a separator: nothing to mark.
+           ((save-excursion
+              (goto-char pos)
+              (catch 'sep
+                (dolist (s seps) (when (looking-at-p s) (throw 'sep t)))))
+            nil)
 
+           ;; POS is immediately after a `**' or `__' pair (i.e. the
+           ;; opening delimiter just ended here): nothing to mark.
+           ((and (> pos (point-min))
+                 (save-excursion
+                   (goto-char (1- pos))
+                   (catch 'sep
+                     (dolist (s '("\\*\\*" "__"))
+                       (when (looking-at-p s) (throw 'sep t))))))
+            nil)
+
+           ;; ---- Separator-delimited scan ------------------------------
+           (t
+            (let* ((sep (mapconcat #'identity seps "\\|"))
+                   ;; BEG = end of the nearest separator to the left.
+                   (beg (save-excursion
+                          (goto-char pos)
+                          (when (re-search-backward sep nil t) (match-end 0))))
+                   ;; END = start of the nearest separator to the right.
+                   (end (save-excursion
+                          (goto-char pos)
+                          (when (re-search-forward sep nil t) (match-beginning 0)))))
+              (cond
+               ;; Delimited on both sides: that region is the word.
+               ((and beg end (not (= beg end)))
+                (list beg end))
+
+               ;; ---- Character-class fallback --------------------------
+               ;; No surrounding separators (e.g. inside `[text](url)'
+               ;; after narrowing, or in plain `foo.bar'): use explicit
+               ;; word characters so `.', `,', `[', `]', `(', `)' etc.
+               ;; split the word, regardless of syntax table.
+               (t
+                (save-excursion
+                  (goto-char pos)
+                  (when (looking-at-p word-re)
+                    (let ((b (progn (skip-chars-backward word-skip) (point)))
+                          (e (progn (skip-chars-forward  word-skip) (point))))
+                      (when (< b e) (list b e))))))))))))))))
+
+(defun cui-block-mark-step-word-with-separators (pos _block-beg _block-end)
+  "Call `cui-block-mark-step-word with POS and INCLUDE-SEPARATORS set to t."
+  (cui-block-mark-step-word pos _block-beg _block-end t))
 
 (defun cui-block-mark-step-org-element (pos _block-beg _block-end)
   "Step 0: Org element, unless a markdown block is smaller.
@@ -1642,7 +1709,7 @@ If universal argument ARG is non-nil, mark content of cui block."
                     (bend (cdr bregion))
                     (pos (point)))
           (if arg
-              ;; - mark block content
+              ;; - mark block header
               (when-let* ((reg (funcall #'cui-block-mark-step-block-content nil nil nil))
                           (beg (car reg))
                           (end (cadr reg)))
@@ -1659,11 +1726,12 @@ If universal argument ARG is non-nil, mark content of cui block."
               (cui-block-mark-chat-message-at-point)
               (message "Chat message"))
              ;; at markdown block header
-             ((when-let* ((reg (funcall #'cui-block-mark-step-markdown-content nil nil nil))
+             ((= (or (car (save-excursion (cui-block--markdown-block-p))) -1)
+                 (line-beginning-position))
+              (let* ((reg (funcall #'cui-block-mark-step-markdown-content nil nil nil))
                           (beg (car reg))
                           (end (cadr reg)))
-                (cui-block--activate-region beg end)
-                t))
+                (cui-block--activate-region beg end)))
              (t
               (goto-char pos)
               (cui-block-mark-at-point-by-steps)))))))))

@@ -496,7 +496,7 @@ Skips targets already wrapped in backticks."
         (goto-char beg) (insert "`"))
       (message "Quoted")))))
 ;; set in .emacs:
-;; (define-key cui-mode-map (kbd "C-`") #'cui-block-quote-word-or-region)
+;; (define-key cui-mode-map (kbd "C-`") #'cui-optional-quote-word-or-region)
 
 ;;;; provide
 (provide 'cui-optional)
