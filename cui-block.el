@@ -1568,7 +1568,7 @@ a `**'/`__' pair and no special construct matched."
 
 (defun cui-block-mark-step-word-with-separators (pos _block-beg _block-end)
   "Call `cui-block-mark-step-word with POS and INCLUDE-SEPARATORS set to t."
-  (cui-block-mark-step-word pos _block-beg _block-end t))
+  (cui-block-mark-step-word pos nil nil t))
 
 (defun cui-block-mark-step-org-element (pos _block-beg _block-end)
   "Step 0: Org element, unless a markdown block is smaller.
