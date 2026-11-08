@@ -1475,7 +1475,7 @@ returned as-is, i.e. the surrounding delimiters are kept
 
 Returns nil when point sits on a separator or immediately after
 a `**'/`__' pair and no special construct matched."
-  (message "Word")
+  (message "a word")
   ;; Regexp / character-set definitions:
   ;;   SEPS       -- delimiters that bound a word (whitespace, `>',
   ;;                 `**', `__').
@@ -1577,7 +1577,7 @@ Argument POS is position where to find."
          (block-size (when reg (- (cdr reg) (car reg)))))
     (deactivate-mark)
     (goto-char pos)
-    (message "Org Element")
+    (message "an org element")
     (org-mark-element)
     (if (and block-size
              (> (- (region-end) (region-beginning)) block-size))
@@ -1588,7 +1588,7 @@ Argument POS is position where to find."
   "Step 1: Markdown block content.
 Argument BLOCK-BEG is CUI block beg.
 Argument BLOCK-END is CUI block end."
-  (message "MBlock content")
+  (message "a content of markdown block")
   (when-let* ((rng1 (cui-block--markdown-block-p block-beg block-end))
               (rng2 (cui-block--markdown-block-content-range
                      (car rng1) (cdr rng1))))
@@ -1598,7 +1598,7 @@ Argument BLOCK-END is CUI block end."
   "Step 2: Markdown block with header and footer.
 Argument BLOCK-BEG is CUI block beg.
 Argument BLOCK-END is CUI block end."
-  (message "MBlock with header")
+  (message "a markdown block")
   (let ((rng (cui-block--markdown-block-p block-beg block-end)))
     (when rng
       (list (car rng)
@@ -1606,13 +1606,13 @@ Argument BLOCK-END is CUI block end."
 
 (defun cui-block-mark-step-chat-message (_pos _block-beg _block-end)
   "Step 3: Chat message at point."
-  (message "Chat message")
+  (message "a chat message")
   (cui-block-mark-chat-message-at-point)
   (list (region-beginning) (region-end)))
 
 (defun cui-block-mark-step-block-content (_pos _block-beg _block-end)
   "Step 4: Block content region."
-  (message "Block content")
+  (message "a content of CUI block")
   (let ((reg (cui-block--contents-region)))
     (when reg (list (car reg) (cdr reg)))))
 
@@ -1620,7 +1620,7 @@ Argument BLOCK-END is CUI block end."
   "Step 5: Whole cui block.
 Argument BLOCK-BEG is CUI block beg.
 Argument BLOCK-END is CUI block end."
-  (message "Block whole")
+  (message "a CUI block full")
   (list block-beg block-end))
 
 
@@ -1720,11 +1720,11 @@ If universal argument ARG is non-nil, mark content of cui block."
              ;; at cui block header
              ((looking-at cui-block--cui-block-begin-end-re)
               (cui-block--activate-region bbeg bend)
-              (message "Block whole"))
+              (message "a CUI block"))
              ;; at message prefix
              ((looking-at cui-block--chat-prefixes-re)
               (cui-block-mark-chat-message-at-point)
-              (message "Chat message"))
+              (message "a chat message"))
              ;; at markdown block header
              ((= (or (car (save-excursion (cui-block--markdown-block-p))) -1)
                  (line-beginning-position))
