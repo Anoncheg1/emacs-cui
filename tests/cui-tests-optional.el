@@ -222,6 +222,78 @@
            (with-temp-buffer (insert " - 0x1F")  (cui-optional--classify-hyphen 2)) ; nil
            nil)))
 
+(ert-deftest cui-optional--classify-hyphen-test ()
+  "Test `cui-optional--classify-hyphen' against known cases."
+  (with-temp-buffer
+    (insert "10-20")
+    (goto-char 3)
+    (should (eq (cui-optional--classify-hyphen) 'en-dash)))
+
+  (with-temp-buffer
+    (insert "2024-01-15")
+    (goto-char 5)
+    (should (eq (cui-optional--classify-hyphen) nil)))
+
+  (with-temp-buffer
+    (insert "01-15-2024")
+    (goto-char 3)
+    (should (eq (cui-optional--classify-hyphen) nil)))
+
+  (with-temp-buffer
+    (insert "2024-01")
+    (goto-char 5)
+    (should (eq (cui-optional--classify-hyphen) nil)))
+
+  (with-temp-buffer
+    (insert "1-15-2024")
+    (goto-char 2)
+    (should (eq (cui-optional--classify-hyphen) nil)))
+
+  (with-temp-buffer
+    (insert "10-20-30")
+    (goto-char 3)
+    (should (eq (cui-optional--classify-hyphen) 'en-dash)))
+
+  (with-temp-buffer
+    (insert "0xFF-0x1F")
+    (goto-char 5)
+    (should (eq (cui-optional--classify-hyphen) 'en-dash)))
+
+  (with-temp-buffer
+    (insert "a1-b2")
+    (goto-char 3)
+    (should (eq (cui-optional--classify-hyphen) 'en-dash)))
+
+  (with-temp-buffer
+    (insert "well-known")
+    (goto-char 5)
+    (should (eq (cui-optional--classify-hyphen) nil)))
+
+  (with-temp-buffer
+    (insert " - ")
+    (goto-char 2)
+    (should (eq (cui-optional--classify-hyphen) nil)))
+
+  (with-temp-buffer
+    (insert "2024-1-15")
+    (goto-char 5)
+    (should (eq (cui-optional--classify-hyphen) nil)))
+
+  (with-temp-buffer
+    (insert "5-10")
+    (goto-char 2)
+    (should (eq (cui-optional--classify-hyphen) 'en-dash)))
+
+  (with-temp-buffer
+    (insert "50-60")
+    (goto-char 3)
+    (should (eq (cui-optional--classify-hyphen) 'en-dash)))
+
+  (with-temp-buffer
+    (insert "- item")
+    (goto-char 1)
+    (should (eq (cui-optional--classify-hyphen) nil))))
+
 ;; -=-= For `cui-optional-markdown-blocks-correct-dashes-hook-function'
 (ert-deftest cui-correct-dashes-en-dash-test ()
   "A single hyphen between two chars becomes an en-dash."

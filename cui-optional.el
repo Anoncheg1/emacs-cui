@@ -137,15 +137,16 @@ Arguments BEG END described in `cui-before-send-hook' hook."
 ;; -=-= pre-send: correct dashes characters chhook
 
 (defun cui-optional--hex-expression-p (str)
-  "Return non-nil if STR is a complete, valid hex integer literal."
+  "Return non-nil if STR is a hex-like token.
+Accepts valid hex integer literals (\"0xFF\", \"#x1F\", \"#16r1F\",
+\"+0x10\", \"-0xFF\") as well as bare hex-digit runs such as
+\"a1\", \"b2\", \"dead\", \"beef\" — the latter are needed because
+`cui-optional--classify-hyphen' uses this predicate on the raw
+tokens surrounding a hyphen (e.g. \"a1-b2\", \"0xFF-0x1F\")."
   (and (stringp str)
-       (or (string-match-p "\\`[+-]?\\(?:0[xX]\\|#[x]\\|#[0-9]+[rR]\\)[0-9a-fA-F]+\\'" str)
-       (condition-case nil
-           (let ((reg (read-from-string str)))
-             (and (integerp (car reg))
-                  (= (cdr reg) (length str))))
-         (error nil)))))
-
+       (> (length str) 0)
+       (or (string-match-p "\\`[+-]?\\(?:0[xX]\\|#[xX]\\|#[0-9]+[rR]\\)[0-9a-fA-F]+\\'" str)
+           (string-match-p "\\`[0-9a-fA-F]+\\'" str))))
 
 (defun cui-optional--words-around (pos)
   "Return (BEFORE AFTER): the two words around POS.
@@ -181,6 +182,7 @@ POS is the position OF the hyphen, not after it.
 Return `em-dash', `en-dash', or nil (leave unchanged).
 Rules:
   * \" - \" (blanks on both sides)          -> em-dash
+  * hyphen inside a date (2024-01-15, 01-15-2024, 2024-01) -> nil
   * digit-hyphen-digit (\"10-20\")          -> en-dash
   * hex-hyphen-hex (\"0xFF-0x1F\", \"a1-b2\") -> en-dash
   * line-leading hyphen (list bullet)     -> nil
@@ -192,25 +194,39 @@ Works outside `org-mode' too."
          (r   (char-after (1+ pos)))
          (lsp (memq l '(?\s ?\t)))
          (rsp (memq r '(?\s ?\t)))
-         ;; `skip-chars-*' has no POSIX-class support: use an explicit set.
          (wc  "a-zA-Z0-9_#"))
     (cond
+
+
      ;; List bullet / leading dash: leave alone.
      ((save-excursion (goto-char pos) (forward-line 0)
                       (skip-chars-forward " \t")
                       (eq (point) pos))
       nil)
 
-     ;; " - " -> em-dash.
+     ;; " - " -> em-dash. (higher priority)
      ((and lsp rsp) 'em-dash)
 
-     ;; Both neighbours are digits -> numeric range.
-     ((and l r (cl-digit-char-p l) (cl-digit-char-p r)) 'en-dash)
 
-     ;; Both neighbours are part of hex-like tokens, and at least one
-     ;; side is not a plain alphabetic word (so "a-b"/"well-known"
-     ;; stay hyphens while "a1-b2"/"0xFF-0x1F"/"dead-beef" become
-     ;; en-dashes).
+
+     ;; Both neighbours are digits -> numeric range, unless it is a date.
+     ((and l r (cl-digit-char-p l) (cl-digit-char-p r))
+      (let* ((run (save-excursion
+                    (goto-char pos)
+                    (skip-chars-backward "0-9-")
+                    (let ((beg (point)))
+                      (skip-chars-forward "0-9-")
+                      (buffer-substring-no-properties beg (point)))))
+             (parts (split-string run "-")))
+        (unless (and (cl-every (lambda (x) (string-match-p "\\`[0-9]+\\'" x))
+                               parts)
+                     (or (and (= (length parts) 3)
+                              (cl-some (lambda (x) (= (length x) 4)) parts))
+                         (and (= (length parts) 2)
+                              (= (length (nth 0 parts)) 4))))
+          'en-dash)))
+
+     ;; Hex-like range (unchanged).
      ((and l r (not lsp) (not rsp)
            (let ((before (save-excursion
                            (goto-char pos) (skip-chars-backward wc)

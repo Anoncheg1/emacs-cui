@@ -290,17 +290,18 @@ Return the valid special-block element list, or nil otherwise.
 
 This function may modify the match data."
   (catch 'cui-block                                             ; early exit on first match
-    (let ((node (let ((start (or element                            ; ELEMENT wins over point context
-                                 (org-element-at-point))))           ; at-point may be nil (non-Org/bob)
-                  (and (consp start) start))))                      ; reject nil/string/t start
-      (while node                                                   ; manual parent walk: read :parent only
-        (when (and (eq (org-element-type node) 'special-block)      ; nearest enclosing or self
-                   (let ((type (org-element-property :type node)))  ; nil :type -> invalid block
-                     (and (stringp type)                            ; :type could be nil/symbol
-                          (member (downcase type) '("ai" "cui"))))) ; case-insensitive type match
-          (throw 'cui-block node))                                  ; matched: bail out immediately
-        (setq node (org-element-property :parent node)))            ; pure :parent lookup, cache-safe
-      nil)))                                                        ; no match anywhere up the chain
+    (org-element-with-disabled-cache
+      (let ((node (let ((start (or element                            ; ELEMENT wins over point context
+                                   (org-element-at-point))))           ; at-point may be nil (non-Org/bob)
+                    (and (consp start) start))))                      ; reject nil/string/t start
+        (while node                                                   ; manual parent walk: read :parent only
+          (when (and (eq (org-element-type node) 'special-block)      ; nearest enclosing or self
+                     (let ((type (org-element-property :type node)))  ; nil :type -> invalid block
+                       (and (stringp type)                            ; :type could be nil/symbol
+                            (member (downcase type) '("ai" "cui"))))) ; case-insensitive type match
+            (throw 'cui-block node))                                  ; matched: bail out immediately
+          (setq node (org-element-property :parent node)))            ; pure :parent lookup, cache-safe
+        nil))))                                                        ; no match anywhere up the chain
 
 
 (defun cui-block-p (&optional element find-parent)
