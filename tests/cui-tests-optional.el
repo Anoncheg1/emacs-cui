@@ -411,11 +411,21 @@
     (should (string-equal res ",`goto-char`. ")))
 
   (with-temp-buffer
-    (insert "**goto-char** ")
+    (insert "**goto-char**\n    v")
     (goto-char (+ 5 (point-min)))
     (cui-optional-quote-word-or-region)
+    (should (= (point) 13))
     (setq res (buffer-string))
-    (should (string-equal res "**`goto-char`** ")))
+    (should (string-equal res "**`goto-char`**\n    v")))
+
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (insert "    (cui-optional-quote-word-or-region)\n   v")
+    (goto-char (+ 8 (point-min)))
+    (cui-optional-quote-word-or-region)
+    (should (= (point) 40))
+    (setq res (buffer-string))
+    (should (string-equal res "    (`cui-optional-quote-word-or-region`)\n   v")))
 
 ;;   (with-temp-buffer (insert "  goto-char") (goto-char 3)
 ;;   (cui-block-mark-step-word 3 nil nil))          ;; => (3 12) ✓

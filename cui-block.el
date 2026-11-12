@@ -1455,6 +1455,7 @@ Used in `cui-block-mark-step-chat-message' and in
 
 
 (defvar cui-block-mark-word-chars "[:alnum:]_<>/@-")
+(defvar cui-block-mark-step-word-seps (list "[[:space:]]" ">" "\\*\\*" "__" "(" ")"))
 
 (defun cui-block-mark-step-word (pos _block-beg _block-end &optional include-separators)
   "Mark the word at POS using cui word separators.
@@ -1483,7 +1484,7 @@ a `**'/`__' pair and no special construct matched."
   ;;   WORD-RE    -- one word character (used with `looking-at-p').
   ;;   WORD-SKIP  -- same set, in `skip-chars-forward/backward' form
   ;;                 (NO outer brackets, `-' last so it is literal).
-  (let ((seps '("[[:space:]]" ">" "\\*\\*" "__"))
+  (let ((seps cui-block-mark-step-word-seps)
         (word-re (concat "[" cui-block-mark-word-chars "]"))
 
         ;; (word-re "[[:alnum:]_!?=<>+*/&%$#:~^@'-]")
@@ -1544,11 +1545,11 @@ a `**'/`__' pair and no special construct matched."
                    ;; BEG = end of the nearest separator to the left.
                    (beg (save-excursion
                           (goto-char pos)
-                          (when (re-search-backward sep nil t) (match-end 0))))
+                          (when (re-search-backward sep (line-beginning-position) t) (match-end 0))))
                    ;; END = start of the nearest separator to the right.
                    (end (save-excursion
                           (goto-char pos)
-                          (when (re-search-forward sep nil t) (match-beginning 0)))))
+                          (when (re-search-forward sep (line-end-position) t) (match-beginning 0)))))
               (cond
                ;; Delimited on both sides: that region is the word.
                ((and beg end (not (= beg end)))

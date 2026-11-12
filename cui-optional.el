@@ -478,18 +478,19 @@ TODO: May cause error at `org-element--parse-to' at `re-search-forward'."
     (apply orig-fun args)))
 
 
-;; -=-= Quite region or word at postion
+;; -=-= Quite region or word at postion at line
 
 (defun cui-optional-quote-word-or-region ()
   "Quote word at point (via `cui-block-mark-step-word') with backticks.
 If region is active and on a single line, quote the region instead.
 Skips targets already wrapped in backticks."
   (interactive)
-  (let* ((use-region (and (region-active-p)
-                          (= (line-number-at-pos (region-beginning))
-                             (line-number-at-pos (region-end)))))
+  (let* ((use-region (region-active-p)
+                          ;; (= (line-number-at-pos (region-beginning))
+                          ;;    (line-number-at-pos (region-end)))
+                          )
          (raw (unless use-region
-                (cui-block-mark-step-word (point) nil nil)))
+                (save-excursion (cui-block-mark-step-word (point) nil nil))))
          (beg (if use-region (region-beginning) (car raw)))
          (end (if use-region (region-end) (cadr raw))))
     ;; (print (list beg end (eq (char-before beg) ?`) (eq (char-before (1+ beg)) ?`)))
@@ -510,6 +511,7 @@ Skips targets already wrapped in backticks."
       (save-excursion
         (goto-char end) (insert "`")
         (goto-char beg) (insert "`"))
+      (goto-char (1+ end))
       (message "Quoted")))))
 ;; set in .emacs:
 ;; (define-key cui-mode-map (kbd "C-`") #'cui-optional-quote-word-or-region)
