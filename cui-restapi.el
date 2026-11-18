@@ -398,6 +398,8 @@ Return:
           (t
            (list nil))))))
 
+;; in info:
+;; :sys - (:sys) - (cui-restapi--get-values '(:sys) :sys) -> (nil)
 
 (defun cui-restapi--get-values-enhanced (keeper key)
   "KEY string may have postfix --N.

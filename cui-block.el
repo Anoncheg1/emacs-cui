@@ -400,26 +400,56 @@ Arguments
 Return new value."
   (let* ((entry (assoc key info))
          ;; 1. Value sourcing: Priority (Header Alist > Org Prop > Default)
-         (v (or (and entry
+         (entry (or (and entry
                      (or (cdr entry) t))
-                (and prop (org-entry-get-with-inheritance prop))
-                default)))
+                (and prop (org-entry-get-with-inheritance prop))))
+         (v (or entry default)))
+    ;; (print (list "vv" entry v type))
     ;; 2. Declarative Type Casting
     (pcase type
-      ('number (cond ((or (null v) (eq v t) (and (stringp v) (string-equal v "nil"))) nil) ; key without value or "nil"
+      ('number (cond ((and (eq entry t) (not default)) nil)
+                     ((and (eq entry t) default) nil)
+                     ((or (null v) (eq v t) (and (stringp v) (string-equal v "nil"))) nil) ; key without value or "nil"
                      ((stringp v) (string-to-number v))
                      ((numberp v) v)
                      (t (user-error "Invalid number: %s" v))))
       ('bool   (when (and v (or (eq v t)
-                          (and (stringp v)
-                               (member (downcase v) '("t" "true" "yes" "on" "1")))))
+                                (and (stringp v)
+                                     (member (downcase v) '("t" "true" "yes" "on" "1")))))
                  t))
-      ('string (if (or (eq v t) ; key without value
-                       (string-equal v "nil")) ; key with nil
-                       nil
+      ('string (if (and entry (string-equal entry "nil"))
+                   nil
                  ;; else
-                 v))
-      (_ v))))
+                 (if (eq entry t) ; no value
+                     (if (not default)
+                         ""
+                       ;; else
+                       default)
+                   ;; else
+                   v)))
+      (_ (if (string-equal v "nil")
+                   nil
+                 ;; else
+                 (if (and (not default)
+                          (eq v t)) ; no value
+                     nil
+                   ;; else
+                   v))))))
+
+;; info cases:
+;; :n - (:n) - (cui-block--get-val '((:n)) :n nil nil 'number) -> nil
+;; :n - (:n) - (cui-block--get-val '((:n)) :n nil 10 'number) -> nil
+;;  - () - (cui-block--get-val '() :sys) -> nil
+;;  - () - (cui-block--get-val '() :sys nil "vv" 'string) -> "vv"
+;; :sys - (:sys) - (cui-block--get-val '((:sys)) :sys) -> nil
+;; :sys - (:sys) - (cui-block--get-val '((:sys)) :sys nil nil 'string) -> ""
+;; :sys - (:sys) - (cui-block--get-val '((:sys)) :sys nil "vv" 'string) -> "vv"
+;; :sys "" - (:sys . "") - (cui-block--get-val '((:sys . "")) :sys) -> ""
+;; :sys "" - (:sys . "") - (cui-block--get-val '((:sys . "")) :sys nil "vv" 'string) -> ""
+;; :sys nil - (:sys . "nil") - (cui-block--get-val '((:sys . "nil")) :sys) -> nil
+;; :sys "nil" - (:sys . "nil") - (cui-block--get-val '((:sys . "nil")) :sys) -> nil
+;; :sys "nil" - (:sys . "nil") - (cui-block--get-val '((:sys . "nil")) :sys nil "vv" 'string) -> nil
+;; :sys "t" - (:sys . "t") - (cui-block--get-val '((:sys . "t")) :sys) -> "t"
 
 ;; info cases:
 ;; - string: '((:model . "openai/gpt-4.1"))

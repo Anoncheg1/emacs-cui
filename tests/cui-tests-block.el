@@ -201,7 +201,7 @@ and INFO-ALIST is the parameters from its header."
     (should-not (cui-block-p (org-element-at-point)))))
 
 
-;; -=-= Test for `cui-block--let-params-macro'
+;; -=-= Test for `cui-block--get-val'
 (ert-deftest cui-tests-block--let-params-all-from-info-test1 ()
   "Test when all parameters are provided in the block header (info alist)."
   (with-temp-buffer
@@ -209,6 +209,10 @@ and INFO-ALIST is the parameters from its header."
     (let* ((test-block "#+begin_ai :stream t :stream1 t :sys \"A helpful LLM.\" :stream2 :max-tokens 50 :max-tokens2 :model \"gpt-3.5-turbo\" :model1 :model2 t :model3 :temperature 0.7\n#+end_ai\n")
            (element (cui-test-setup-buffer test-block))
            (info (progn (goto-char (org-element-property :begin element)) (cui-block-get-info))))
+      ;; (print info)))
+
+      ;; (print (cui-block--get-val info :model1 "MODEL1" nil 'string))))
+      ;; (print (cui-block--get-val info :max-tokens2 nil 10 'number))))
       ;; (unwind-protect
       ;; Position point inside the block for correct context, though not strictly needed for info directly.
       (let ((stream (cui-block--get-val info :stream "STREAM" nil 'string))
@@ -216,14 +220,14 @@ and INFO-ALIST is the parameters from its header."
             (stream2 (cui-block--get-val info :stream2 "STREAM2" 0 'number))
             (stream3 (cui-block--get-val info :stream3 "STREAM3" 1 'number))
             (sys (cui-block--get-val info :sys "SYS" nil 'string))
-            (max-tokens (cui-block--get-val info :max-tokens "MAX-TOKENS" nil 'integer))
-            (max-tokens2 (cui-block--get-val info :max-tokens2 "MAX-TOKENS2" 10 'integer))
+            (max-tokens (cui-block--get-val info :max-tokens "MAX-TOKENS" nil 'number)) ; integer
+            (max-tokens2 (cui-block--get-val info :max-tokens2 "MAX-TOKENS2" 10 'number)) ; integer
             (model (cui-block--get-val info :model "MODEL" nil 'string))
             (model1 (cui-block--get-val info :model1 "MODEL1" nil 'string))
             (model2 (cui-block--get-val info :model2 "MODEL2" 10 'number))
             (model4 (cui-block--get-val info :model4 "MODEL4" nil 'number))
             (model3 (cui-block--get-val info :model3 "MODEL3" nil 'string))
-            (temperature (cui-block--get-val info :temperature "TEMPERATURE" nil 'float))
+            (temperature (cui-block--get-val info :temperature "TEMPERATURE" nil 'number)) ; float
             (unknown (cui-block--get-val info :unknown nil "s" )))
                                          ;; (print (list "model3" (type-of model3) model3 )))))
                                    ;; (print (list "stream2" (type-of stream2) stream2 ))
@@ -234,23 +238,23 @@ and INFO-ALIST is the parameters from its header."
                                    (should (eq stream1 t))
                                    (should (= stream3 1))
                                    (should (eq stream2 nil))
-                                   (should (eq max-tokens2 t))
+                                   (should (eq max-tokens2 nil))
                                    (should (string-equal stream "t"))
                                    (should (= max-tokens 50))
                                    (should (string-equal sys "A helpful LLM."))
                                    (should (string-equal model "gpt-3.5-turbo"))
                                    (should (= temperature 0.7))
                                    (should (string-equal unknown "s"))
-                                   (should (string-equal model1 nil))
+                                   (should (string-equal model1 ""))
                                    (should (= model2 0))
                                    (should (string-equal model4 nil))
-                                   (should (string-equal model3 nil))))))
+                                   (should (string-equal model3 ""))))))
 
 (ert-deftest cui-tests-block--let-params-all-from-info-strings ()
   "Test when all parameters are provided in the block header (info alist)."
   (with-temp-buffer
     (org-mode)
-    (let* ((test-block "#+begin_ai :sys nil :sys1 \n#+end_ai\n")
+    (let* ((test-block "#+begin_ai :sys nil :sys1 :sys3 \"nil\" :sys4 \"\" :sys5 \n#+end_ai\n")
            (element (cui-test-setup-buffer test-block))
            (default "ss")
            (info (progn (goto-char (org-element-property :begin element)) (cui-block-get-info))))
@@ -258,10 +262,50 @@ and INFO-ALIST is the parameters from its header."
       ;; Position point inside the block for correct context, though not strictly needed for info directly.
       (let ((sys (cui-block--get-val info		:sys "SYS" default 'string))
             (sys1 (cui-block--get-val info		:sys1 "SYS1" default 'string))
-            (sys2 (cui-block--get-val info		:sys2 "SYS2" default 'string)))
+            (sys2 (cui-block--get-val info		:sys2 "SYS2" default 'string)) ; missed
+            (sys3 (cui-block--get-val info		:sys3 "SYS3" default 'string))
+            (sys4 (cui-block--get-val info		:sys4 "SYS4" default 'string))
+            (sys5 (cui-block--get-val info		:sys5 "SYS5" nil 'string))) ; sys1 also
+        ;; (print info))))
+        ;; (print sys3))))
         (should-not sys)
-        (should-not sys1)
-        (should (string-equal sys2 default))))))
+        (should (string-equal sys1 default))
+        (should (string-equal sys2 default))
+        (should-not sys3)
+        (should (string-equal sys4 ""))
+        (should (string-equal sys5 ""))))))
+
+(ert-deftest cui-test-block--get-val ()
+  "Test suite for cui-block--get-val covering various info alist and type casting scenarios."
+  ;; 1. :sys without value -> nil
+  (should (equal (cui-block--get-val '((:sys)) :sys) nil))
+
+  ;; 2. :sys without value, type 'string, no default -> ""
+  (should (equal (cui-block--get-val '((:sys)) :sys nil nil 'string) ""))
+
+  ;; 3. :sys without value, type 'string, default "vv" -> "vv"
+  (should (equal (cui-block--get-val '((:sys)) :sys nil "vv" 'string) "vv"))
+
+  ;; 4. :sys with empty string value -> ""
+  (should (equal (cui-block--get-val '((:sys . "")) :sys) ""))
+
+  ;; 5. :sys with empty string value, default "vv", type 'string -> ""
+  (should (equal (cui-block--get-val '((:sys . "")) :sys nil "vv" 'string) ""))
+
+  ;; 6 & 7. :sys with "nil" string value -> nil
+  (should (equal (cui-block--get-val '((:sys . "nil")) :sys) nil))
+
+  ;; 8. :sys with "nil" string value, default "vv", type 'string -> nil
+  (should (equal (cui-block--get-val '((:sys . "nil")) :sys nil "vv" 'string) nil))
+
+  ;; 9. :sys with "t" string value -> "t"
+  (should (equal (cui-block--get-val '((:sys . "t")) :sys) "t"))
+
+ ;; 10. Empty info list, no default -> nil
+  (should (equal (cui-block--get-val '() :sys) nil))
+
+  ;; 11. Empty info list, default "vv", type 'string -> "vv"
+  (should (equal (cui-block--get-val '() :sys nil "vv" 'string) "vv")))
 
 
 (ert-deftest cui-tests-block--let-params-all-from-info-test2 ()
@@ -282,7 +326,7 @@ and INFO-ALIST is the parameters from its header."
             (stream2 (cui-block--get-val info :stream2 nil nil 'bool))
             (stream3 (cui-block--get-val info :stream3 nil t   'bool))
             (stream4 (cui-block--get-val info :stream4 nil nil 'bool)))
-        (should (string-equal model nil))
+        (should (string-equal model ""))
         (should (equal model1 nil))
         (should (equal model2 nil))
         (should (equal stream nil))

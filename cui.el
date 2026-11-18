@@ -341,17 +341,20 @@ Return string or vector."
   (if (eql req-type 'completion) ; old
       (cui-block-tags-replace (string-trim (cui-block-get-content element))) ; return string
     ;; else - chat - vector
-    (cui-block-tags-get-content-ai-messages
-     element
-     noweb-control
-     cui-restapi-links-only-last ; links-only-last
-     nil ; not-clear-properties
-     nil ; cui-block-markers
-     nil ; disable-tags
-     req-type
-     (if (and max-tokens cui-restapi-add-max-tokens-recommendation)
-         (concat sys-prompt " "(cui-restapi--get-length-recommendation max-tokens))
-       ;; else
+    (let* ((max-tokens-recommendation (when (and max-tokens cui-restapi-add-max-tokens-recommendation)
+                                        (cui-restapi--get-length-recommendation max-tokens))) ; may be nil
+           (sys-prompt (if max-tokens-recommendation
+                           (concat sys-prompt " " max-tokens-recommendation)
+                         ;; else
+                         sys-prompt)))
+      (cui-block-tags-get-content-ai-messages
+       element
+       noweb-control
+       cui-restapi-links-only-last ; links-only-last
+       nil ; not-clear-properties
+       nil ; cui-block-markers
+       nil ; disable-tags
+       req-type
        sys-prompt))))
 
 
@@ -361,10 +364,12 @@ Return string or vector."
 Return list of strings to print."
   ;; `cui-parse-org-header'
   (seq-let (element noweb-control sys-prompt model max-tokens top-p temperature frequency-penalty presence-penalty service stream info) (cui-parse-org-header)
+    (cui--debug "cui-expand-block-deep %s" noweb-control sys-prompt model max-tokens top-p temperature frequency-penalty presence-penalty service stream info)
     (let* ((req-type (cui-block--get-request-type info))
-           (sys-prompt-max-tokens-string (if (and max-tokens
-                                                  cui-restapi-add-max-tokens-recommendation)
-                                             (concat sys-prompt " " (cui-restapi--get-length-recommendation max-tokens))
+           (max-tokens-recommendation (when (and max-tokens cui-restapi-add-max-tokens-recommendation)
+                                         (cui-restapi--get-length-recommendation max-tokens)))
+           (sys-prompt-max-tokens-string (if max-tokens-recommendation
+                                             (concat sys-prompt " " max-tokens-recommendation)
                                            ;; else
                                            sys-prompt))
            (messages (unless (eql req-type 'completion)

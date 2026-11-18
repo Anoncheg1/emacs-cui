@@ -75,8 +75,8 @@ MESSAGES is result of `cui-restapi-prepare-content'.
 IND count from 0.  RESP-QUEST  is list of string  of lengh IND+1  - raw
 content of cui block or answer from  LLM.  We assume that commands and AI
 answers except of the first one are already in MESSAGES."
-  (let* ((recom (if (and cui-restapi-add-max-tokens-recommendation max-tokens)
-                    (cui-restapi--get-length-recommendation max-tokens)))
+  (let* ((recom (when (and cui-restapi-add-max-tokens-recommendation max-tokens)
+                  (cui-restapi--get-length-recommendation max-tokens)))
          (comm0 (nth 0 commands))
          (comm0 (if (and (= ind 0) recom)
                     (concat comm0 " " recom)
@@ -86,7 +86,9 @@ answers except of the first one are already in MESSAGES."
                        ;; else
                        comm0))
          (comm (nth ind commands))
-         (comm (if recom (concat comm " " recom) comm))
+         (comm (if recom
+                   (concat comm " " recom)
+                 comm))
          (sys0 (list :role 'system :content
                      comm0)))
     (apply #'vector sys0 (append messages
