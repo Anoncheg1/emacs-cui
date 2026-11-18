@@ -262,10 +262,13 @@ REQ-TYPE symbol is completion or chat mostly.  Set by
 
       ;; main
       (let ((content (cui-prepare-messages req-type element noweb-control sys-prompt max-tokens)))
-        (apply #'cui-restapi-request-prepare ; at cui-restapi.el
-               ;; hook - allow you to modify any parameters
-               (cui-block--pipeline-macro (req-type content element model max-tokens top-p temperature frequency-penalty presence-penalty service stream)
-                                          cui-block-msgs-after-prepare-messages-hook))))))
+        (if content
+            (apply #'cui-restapi-request-prepare ; at cui-restapi.el
+                   ;; hook - allow you to modify any parameters
+                   (cui-block--pipeline-macro (req-type content element model max-tokens top-p temperature frequency-penalty presence-penalty service stream)
+                                              cui-block-msgs-after-prepare-messages-hook))
+          ;; else
+          (funcall cui-restapi-show-error-function "Empty - stop" (cui-block-get-header-marker element)))))))
 
 
 (defun cui-request-chain (req-type)

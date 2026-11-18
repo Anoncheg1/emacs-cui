@@ -474,12 +474,15 @@ This function may modify the match data."
             str) ; return string
 
         ;; else - req-type = chat
-        (let* (;; 1) get messages as vector from content
+        (when-let* (;; 1) get messages as vector from content
                (messages (cui-block-msgs--collect-chat-messages-at-point element
                                                                    sys-prompt
                                                                    t)) ; not-merge - user may use links and organize message by self.
-               (_ (cui--debug "cui-block-tags-get-content-ai-messages N2_1" messages))
-               ;; 2) noweb expansion
+               (_ (progn (cui--debug "cui-block-tags-get-content-ai-messages N2_1" messages) t))
+               ;; 2) if no messages - return nil
+               (messages (when (cui-block-msgs--find-last-user-index messages)
+                           messages))
+               ;; 3) noweb expansion
                (messages (if noweb-control
                              (if links-only-last
                                  (cui-block-msgs--modify-vector-last-user-content messages
@@ -492,7 +495,7 @@ This function may modify the match data."
                                                                    cui-block-tags-noweb-split-messages))
                            ;; else
                            messages))
-               ;; 3) tags and links expansion
+               ;; 4) tags and links expansion
                (messages (if (not disable-tags)
                              (if links-only-last
                                  (cui-block-msgs--modify-vector-last-user-content messages
@@ -507,7 +510,7 @@ This function may modify the match data."
                                                                    cui-block-markers))
                            ;; else
                            messages))
-               (_ (cui--debug "cui-block-tags-get-content-ai-messages N2_2" messages))
+               (_ (progn (cui--debug "cui-block-tags-get-content-ai-messages N2_2" messages) t))
                ;; 5) clear properties (for sending to LLM)
                (messages (if not-clear-properties
                              messages
