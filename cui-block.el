@@ -347,17 +347,18 @@ returns the type of request.  INFO is the alist of key-value
    ((not (eql 'x (alist-get :complete info 'x))) 'completion)
    (t 'chat)))
 
-(cl-defun cui-block--get-sys (&key info default)
-  "Check if :sys exist in #+begin_cui parameters.
-If exist return nil or string, if not exist  return `default'.
-Argument INFO is the alist of key-value pairs from `cui-block-get-info'.
-DEFAULT is a string with default system prompt for LLM."
-  (let ((sys-raw  (alist-get :sys info 'x)))
-    ;; if 'x - not resent
-    (if (eql 'x sys-raw)
-        default
-      ;; else - nil or string
-      sys-raw)))
+;; old, not used
+;; (cl-defun cui-block--get-sys (&key info default)
+;;   "Check if :sys exist in #+begin_cui parameters.
+;; If exist return nil or string, if not exist  return `default'.
+;; Argument INFO is the alist of key-value pairs from `cui-block-get-info'.
+;; DEFAULT is a string with default system prompt for LLM."
+;;   (let ((sys-raw  (alist-get :sys info 'x)))
+;;     ;; if 'x - not resent
+;;     (if (eql 'x sys-raw)
+;;         default
+;;       ;; else - nil or string
+;;       sys-raw)))
 
 ;; -=-= info - get-val
 

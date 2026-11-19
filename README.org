@@ -230,7 +230,7 @@ See ~cui-block-roles-prefixes~ in [[.cui-block.el]] for more info.
 - :temperature - float
 - :frequency-penalty - float
 - :presence-penalty - float
-- :sys - string - system prompt, see ~cui-block--get-sys~ in [[./cui-block.el]]
+- :sys - string - system prompt. Use ~:sys nil~ to disable. See ~cui-block--get-val~ for ‘string in [[./cui-block.el]]
 - :chat, :completion, :chain  - bool - specify main function that will handle ~C-c C-c~. For :chain see [[./cui-prompt.el]]
 
 Note: for fast editing :sys parameter in (") double quotes with ~forward-sexp~ function set:

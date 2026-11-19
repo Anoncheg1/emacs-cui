@@ -599,6 +599,7 @@ once.
 
 (defun cui-restapi--get-single-response-text (&optional response)
   "Return text from RESPONSE or nil and signal error if it have \"error\" field.
+After receiving and decoding JSON from reply.
 RESPONSE is JSON with reply for not-stream request in plist format.
 For Completion LLM mode. Used as callback for `cui-restapi--url-request'.
 Same to `cui-restapi--normalize-response' that used for stream.
@@ -1131,20 +1132,21 @@ Should be executed in url-buffer only."
                t)
              (when (and (boundp 'url-http-end-of-headers) url-http-end-of-headers)
                (goto-char url-http-end-of-headers)
+               (cui--debug "cui-restapi--url-maybe-show-request-error N4")
                (condition-case nil
                    (when-let* ((body (json-read))
                                (err (or (alist-get 'error body)
-                                        (plist-get body 'error)))
-                               (mes (or (alist-get 'message err)
-                                        (plist-get err 'message)))
-                               (mes (if (and mes (not (string-blank-p mes)))
-                                        mes
-                                      (json-encode err))))
-                     (funcall cui-restapi-show-error-function (concat (format "%s\n" http-header-first-line)
-                                                                      "Error from the service API:\n\t" mes)
-                              (cui-timers--get-variable (current-buffer)))) ; header-marker
+                                        (plist-get body 'error)))) ; error should be
+                     (cui--debug "cui-restapi--url-maybe-show-request-error N4_1 %s" err)
+                     (let* ((mes (or (alist-get 'message err)
+                                     (plist-get err 'message)))
+                            (mes (prin1-to-string (if mes mes err))))
+
+                       (funcall cui-restapi-show-error-function (concat (format "%s\n" http-header-first-line)
+                                                                        "Error from the service API:\n\t" mes)
+                                (cui-timers--get-variable (current-buffer))))) ; header-marker
                  (error nil)))))
-      (cui--debug "cui-restapi--url-maybe-show-request-error N4 %s" ret)
+      (cui--debug "cui-restapi--url-maybe-show-request-error N5 %s" ret)
       ret)))
 
 
