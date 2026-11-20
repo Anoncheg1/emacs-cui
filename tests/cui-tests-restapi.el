@@ -261,8 +261,20 @@
 (ert-deftest cui-tests-restapi--payload ()
   (should (equal (cui-restapi--payload :messages [])
                  '((messages . []) (stream . :json-false))))
+  (should (equal (cui-restapi--payload)
+                 '((prompt) (stream . :json-false))))
+  (should (equal
+                 '((prompt) (stream . :json-false))))
   (should (equal (cui-restapi--payload :prompt "asd")
-                 '((prompt . "asd") (stream . :json-false)))))
+                 '((prompt . "asd") (stream . :json-false))))
+  (should (equal
+           (let ((cui-restapi-con-request-extra '(:local ((:tools (("type" . "web_search")
+                                                                   ("web_search" . (("enable" . t) ("search_result" . t))))
+                                                                  )))))
+             (cui-restapi--payload
+              :service 'local
+              ))
+             '((prompt) (stream . :json-false) (:tools (("type" . "web_search") ("web_search" ("enable" . t) ("search_result" . t)))))))
 ;; -=-= Handling non-unicode characters at input in url-buffer
 ;; (progn
 ;;   (let (
