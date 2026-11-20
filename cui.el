@@ -165,7 +165,8 @@
 ;;  suite for this
 ;; - make org-to-markdown as a separage file.
 ;; - Implement  Agent Client Protocol (ACP) and Websocket
-;; - expanding @tags should be optional.
+;; - expanding @tags should be optional, use normal links for multimodal image/audio
+;; [[file:~/sources/emacs-cui/cui-restapi.el::1183::(defun cui-restapi--replace-multimodal (string)]]
 
 ;;; Code:
 

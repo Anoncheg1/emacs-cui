@@ -39,6 +39,7 @@ Optional: ~org-links~, available at MELA and at https://github.com/Anoncheg1/ema
 
 * Files
 | File              | Purpose                                                            |
+** Description
 |-------------------+--------------------------------------------------------------------|
 | cui.el            | Minor mode and ~C-c C-c~ activation of #+begin_cui                  |
 | cui-restapi.el    | Connection to REST API (OpenAI-compatible)                         |
@@ -51,7 +52,7 @@ Optional: ~org-links~, available at MELA and at https://github.com/Anoncheg1/ema
 | cui-optional.el   | (optional) Hooks functions for postprocessing                      |
 
 
-** structure
+** Relations
 #+begin_src text
 cui.el
  ├─ cui-block.el
@@ -125,6 +126,8 @@ To set use custom function or disable auto-fill by setting it to ~nil~:
 : M-x customize-variable RET cui-restapi-fill-function
 
 ** Key-Token security approaches to keep it safe
+Ways to specify and keep token safe:
+
 1) Simplies way to set *in .emacs* (same with “M-x customize”):
 : (setq cui-restapi-con-token "xxx")
 
@@ -132,13 +135,13 @@ To set use custom function or disable auto-fill by setting it to ~nil~:
 ~/.emacs.d/cui-tokens.el
 : (setq cui-restapi-con-token "xxx")
 
-.emacs
+In ~/.emacs we load Elis file:
 #+begin_src elisp
 (add-to-list 'load-path "~/.emacs.d/cui-tokens.el")
 (require 'cui-tokens)
 #+end_src
 
-3) Keep token in separate *”auth-source” file* in plain text
+3) Keep token in separate Emacs *auth-source* file.
 
 To get more infomration use Shell commnd:
 : $ info auth-source
@@ -147,6 +150,8 @@ Secret should be stored  in the format:
 or
 : machine local--0 password <your token>
 : machine local--1 password <your token>
+
+To read more, press: ~F1 v auth-sources~
 
 4) Keep token in *encrypted “auth-source” file*. Full decription will be provided later...
 
@@ -302,6 +307,28 @@ There are ~cui-block-roles-prefixes~ variable that allow to customize roles at s
 
 For incoming RestAPI conversion to prefixes ~cui-block-roles-restapi~ variable used.
 
+** Add additional parameters to JSON request body
+
+List may be defined by two ways:
+: (:tools (("as" . "ss")))
+: ("tools" . [(("as" . "ss"))])
+
+Two examples:
+#+begin_src elisp :lexical t :results none :exports code :eval no
+;; two parameters
+(princ (json-encode
+ (cui-restapi--payload :extra '(("var1" . "A")
+                                ("var2" . "B")))))
+;; => {"prompt":null,"stream":false,"var1":"A","var2":"B"}
+
+;; one with list
+(princ (json-encode
+        (cui-restapi--payload :extra '((:tools (("type" . "web_search")
+                                                ("web_search" . (("enable" . t) ("search_result" . t))))
+                                               )))))
+;; => {"prompt":null,"stream":false,"tools":[{"type":"web_search","web_search":{"enable":true,"search_result":true}}]}"
+
+#+end_src
 ** Elisp: Get content of block
 : (cui-block-tags-get-content-main)
 Or

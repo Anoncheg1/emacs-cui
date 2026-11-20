@@ -70,7 +70,7 @@ Arguments TYPE CONTENT BEFORE-POS STREAM parameters described in
                 (point)
                 type
                 (type-of type))
-    (if stream
+    (if (and stream (eq type 'end))
         (cui-optional-remove-distant-empty-lines (save-excursion (cui-block-previous-message)))
       ;; else - not stream
       (cui-optional-remove-distant-empty-lines before-pos))))

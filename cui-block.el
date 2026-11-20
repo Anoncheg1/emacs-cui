@@ -123,8 +123,12 @@ For stream response it is called after every fragments.
 For STREAM executed for every word and one time with TYPE=\'end.
 For non-STREAM executed one time with TYPE=\'end.
 Arguments: type, role-text, pos, buffer
-- TYPE - simbol \='role, \='text or'end,
-- ROLE-TEXT - text or role name,
+- TYPE - simbol
+  - \='role - for streaming
+  - \='text
+  - \='end (for end of text for role),
+  - \='start (with empty ROLE-TEXT),
+- ROLE-TEXT - text,
 - POS - position before text insertion
 - STREAM - stream mode or a single insertion.")
 
@@ -1126,6 +1130,7 @@ Variable `cui-block-roles-prefixes' is used to format role to text."
           (set-marker end-marker (point))
           ;; - hook
           (undo-boundary)
+          (run-hook-with-args 'cui-block-after-chat-insertion-hook 'start nil pos nil)
           (run-hook-with-args 'cui-block-after-chat-insertion-hook 'end text pos nil)
           ;; - "auto-fill"
           (when (and cui-block-fill-function
@@ -1198,13 +1203,14 @@ If response is multiline `cui-block-fill-function' may not
 work properly.(may be old)
 Argument INSERT-ME insert [ME]: at stop type of message."
   ;; (cui--debug "cui-block--insert-stream-response1 %s" (cui-restapi--normalize-response response)) ; response
-  (cui--debug "cui-block--insert-stream-response1" responses)
+  (cui--debug "cui-block--insert-stream-response N1" responses)
   (when responses
     (let ((buffer (marker-buffer end-marker))
           (pos (or cui-block--current-insert-position-marker
                    (marker-position end-marker)))
           (c-chat-role cui-block--current-chat-role)
           stop-flag)
+      (cui--debug "cui-block--insert-stream-response N1 %s" buffer pos c-chat-role)
       ;; (cui--debug "cui-block--insert-stream-response2 %s" normalized)
       ;; (cui--debug "cui-block--insert-stream-response" normalized)
       (unwind-protect ; we need to save variables to url buffer
@@ -1213,8 +1219,9 @@ Argument INSERT-ME insert [ME]: at stop type of message."
               ;; - LOOP Per message
               (dolist (response responses)
                 (let ((type (cui-block--response-type response)) ; symbol
-                      (payload (cui-block--response-payload response))) ; string
-                  ;; (cui--debug "cui-block--insert-stream-response: %s %s %s" type end-marker cui-block--current-insert-position-marker)
+                      (payload (cui-block--response-payload response))
+                      previous-role-prefix) ; string
+                  (cui--debug "cui-block--insert-stream-response N1_1 %s %s %s" type end-marker cui-block--current-insert-position-marker)
                   ;; - Type of message: error
                   (when (eq type 'error)
                     (error (cui-block--response-payload response))) ; not used
@@ -1236,9 +1243,14 @@ Argument INSERT-ME insert [ME]: at stop type of message."
                              (let* ((role-cui (or (cdr (assoc-string payload cui-block-roles-restapi))
                                                   cui-block-roles-restapi-unknown)) ; string to symbol
                                     (role-prefix (car (rassoc role-cui cui-block-roles-prefixes))))
-
+                               ;; run hook
+                               (when (and previous-role-prefix
+                                          (not (string-equal previous-role-prefix role-prefix)))
+                                   (run-hook-with-args 'cui-block-after-chat-insertion-hook 'end nil pos t))
+                               (setq previous-role-prefix role-prefix)
+                               ;; insert text
                                (insert "\n[" role-prefix "]: " (when (eql role-cui 'assistant) "\n")) ; "\n[ME:] " or "\n[AI:] \n"
-
+                               ;; run hook
                                (run-hook-with-args 'cui-block-after-chat-insertion-hook 'role payload pos t)
 
                                (setq pos (point)))))
@@ -1254,8 +1266,9 @@ Argument INSERT-ME insert [ME]: at stop type of message."
                              (setq pos (point))))
 
                     ('stop (progn ; payload = stop_reason
-                             (cui--debug "cui-block--insert-stream-response3 stop_reason: %s" payload)
+                             (cui--debug "cui-block--insert-stream-response N2 stop_reason: %s" payload)
                              (goto-char pos)
+                             (undo-boundary)
                              (run-hook-with-args 'cui-block-after-chat-insertion-hook 'end nil pos t)
                              (let ((text (concat "\n\n[" (car (rassoc 'user cui-block-roles-prefixes)) "]: "))) ; "ME"
                                (if insert-me

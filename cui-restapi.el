@@ -146,6 +146,13 @@ If mode is not chat but completion, appropriate model should be set."
                   (plist :key-type symbol :value-type string :tag "Plist with symbol key and string value"))
   :group 'cui)
 
+(defcustom cui-restapi-con-request-extra '(:openai nil :github nil)
+  "Extra parameters to be merged into the JSON request body.
+This value should be a list, vector or plist with string or keywords and
+ should be correctly serialized into the JSON payload key-values."
+  :type 'sexp
+  :group 'cui)
+
 
 (defcustom cui-restapi-openai-known-chat-models '("gpt-5-chat-latest"
                                                   "gpt-4o-mini"
@@ -243,9 +250,11 @@ you can override it with: '[SYS]: <your prompt>'."
   "Function to display error with parameters: MESSAGE and HEADER-MARKER.
 Used inn cui-restapi to display internal and remote errors.
 Available choices include:
-- `cui-block-insert-result-message' accept message and header-marker parameters.
+- `cui-block-insert-result-message' accept two parameters:
+ message and header-marker.
 To  use  url-buffer,  get header-marker  with  (cui-timers--get-variable
-url-buffer), hence every url-buffer key bound to some cui block variable.
+url-buffer) or `cui-block-get-header-marker`, hence every url-buffer key
+ bound to some cui block variable.
 - `cui-restapi--show-error' ignore header-marker parameter.
 Or provide your own function."
   :type 'function
@@ -422,39 +431,7 @@ Argument KEEPER is a variable with list of key-values."
         values))))
 
 
-(defun cui-restapi--get-token (service)
-  "Get token or errored.
-Get token from `cui-restapi-con-token' or from auth-source.
-Return nil if SERVICE exist without token, signal error if SERVICE
-not found in tokens."
-  (let ((token (cui-restapi--get-values-enhanced cui-restapi-con-token service)))
-    (cui--debug "cui-restapi--get-token %s %s" service token)
-    (if token
-        (prog1 (setq token (car token)) ; nil or value
-          (when (and token (not (stringp token))) ; check that token is string, not number
-            (user-error "Token in `cui-restapi-con-token' is not string but something other, please check")))
-      ;; else - nil not found or `cui-restapi-con-token' is not defined
-      (prog1 (setq token (cui-restapi--get-token-auth-source service))
-        (when (not token)
-          ;; else - not found in auth-sources and not found or `cui-restapi-con-token' is not defined
-          (cond
-           ((and cui-restapi-con-token (proper-list-p cui-restapi-con-token))
-            (user-error "Token not found in defined plist `cui-restapi-con-token' and in auth sources"))
-           ((and cui-restapi-con-token
-                 (stringp cui-restapi-con-token)
-                 (string-empty-p cui-restapi-con-token))
-            (user-error "`cui-restapi-con-token' is an empty string.  Please set"))
-           (t
-            ;; else no `cui-restapi-con-token'
-            (user-error "Please set `cui-restapi-con-token' to your OpenAI API token or setup auth-source (see cui readme)"))))))))
-
-
-;; (cui-restapi--get-token "github") => first token from list
-;; (cui-restapi--get-token "github--0") => first token from list
-;; (cui-restapi--get-token "local") => nil, exist
-;; (cui-restapi--get-token "local") => error!
-
-
+;; old, not used
 (defun cui-restapi--strip-api-url (url)
   "Strip the leading https:// and trailing / from an URL."
   (let* ((stripped-url
@@ -475,6 +452,8 @@ not found in tokens."
         (auth-source-pick-first-password :host service)
         (and (stringp service) (auth-source-pick-first-password :host (concat service "--0" ))))))
 
+;; (auth-source-pick-first-password :host (concat "openai" "--0" ))
+;; (auth-source-pick-first-password :host (cui-restapi--openai-service-clear-dashes "openai"))
 
 (defun cui-restapi--get-endpoint (messages &optional service)
   "Correct endpoint based on the SERVICE and type of requst.
@@ -518,6 +497,40 @@ If MESSAGES are provided, type of request is chat, otherwise completion."
           `(("Authorization" . ,(encode-coding-string (string-join `("Bearer" ,token) " ") 'utf-8))))))))
 
 ;; (cui-restapi--get-headers "local")
+
+(defun cui-restapi--get-token (service)
+  "Get token or errored.
+Get token from `cui-restapi-con-token' or from auth-source.
+Return nil if SERVICE exist without token, signal error if SERVICE
+not found in tokens."
+  ;; - 1) from variable
+  (let* ((token-raw (cui-restapi--get-values-enhanced cui-restapi-con-token service))
+         (token (car token-raw)))
+    (cui--debug "cui-restapi--get-token N1 %s %s" service token-raw token)
+
+    ;; - 2) from auth-sources
+    (unless token-raw
+      (setq token (cui-restapi--get-token-auth-source service)))
+
+    (cui--debug "cui-restapi--get-token N2 %s %s" service token)
+
+    ;; - check for correctness
+    (when (or token-raw token)
+      (when (and token
+                 (or (not (stringp token)) ; check that token is string, not number
+                     (string-empty-p token)))
+        (user-error "Token in `cui-restapi-con-token' is not string but something other, please check")))
+
+    token))
+
+;; (cui-restapi--get-token "github") => first token from list
+;; (cui-restapi--get-token "github--0") => first token from list
+;; (cui-restapi--get-token "local") => nil, exist
+;; (cui-restapi--get-token "local") => error!
+
+;; (cui-restapi--get-token "zai")
+
+
 
 ;; -=-= Prepare content
 ;; noweb-control sys-prompt sys-prompt-for-all-messages &optional _info
@@ -600,31 +613,59 @@ once.
 (defun cui-restapi--get-single-response-text (&optional response)
   "Return text from RESPONSE or nil and signal error if it have \"error\" field.
 After receiving and decoding JSON from reply.
-RESPONSE is JSON with reply for not-stream request in plist format.
+Optional argument RESPONSE is decoded in
+ `cui-restapi--json-safe-decoding' JSON with reply for not-stream
+ request in plist format.
 For Completion LLM mode. Used as callback for `cui-restapi--url-request'.
 Same to `cui-restapi--normalize-response' that used for stream.
+
 We use separate version, because streaming is complicated,
 but we will keep them interchangable.
+
 Result used for `cui-block--insert-single-response'.
 Error should be handled before calling this function in
  `cui-restapi--url-maybe-show-request-error'.
 Return text of message."
   (when response
     (cui--debug "cui-restapi--get-single-response-text response:" response)
-    (let ((err-obj (plist-get response 'error)))
-      (if err-obj
-          (let ((mes (or (plist-get err-obj 'message)
-                         err-obj)))
-            (error mes))
-        ;; else - no "error" field
-        (if-let* ((choice (aref (plist-get response 'choices) 0))
-                  (text (or (plist-get choice 'text)
-                            ;; Together.xyz, Github
-                            (plist-get (plist-get choice 'message) 'content))))
-            ;; - Decode text
-            (decode-coding-string text 'utf-8))))))
+    ;; check for error, just in case.
+    (when-let* ((err-obj (plist-get response 'error))
+                (mes (or (plist-get err-obj 'message)
+                         (prin1-to-string err-obj))))
+      (error mes))
 
+    ;; - main
+    (let* ((choices (plist-get response 'choices))
+           (choice-list (if (vectorp choices) (append choices nil) choices)) ; Convert vector to list if needed; keep list as-is
+           (parts nil))                                                    ; Accumulator list for extracted strings
+      (dolist (choice choice-list)
+        (when-let ((msg (plist-get choice 'message)))                             ; Extract `message` plist from current choice
+          (push (plist-get choice 'text) parts)                         ;  completions API
+          (push (plist-get msg 'reasoning_content) parts)
+          (push (plist-get msg 'content) parts)))                       ; Push raw string (or nil) onto `parts`
 
+      (delq nil parts)                                                ; delete nil element, mutate parts
+      (if parts                                                       ; Ensure at least one non-nil string part exists
+          (mapconcat #'identity
+                     (mapcar (lambda (part)                                     ; Map UTF-8 decoding over each item in `parts`
+                               (if part (decode-coding-string part 'utf-8) "")) ; Decode non-nil part, or map nil to empty string
+                             (nreverse parts))
+                     " ")
+        ;; else
+        (error "Fail to decode response")))))                              ; Signal an error if `parts` is empty/nil
+
+;; (let* ((choices (plist-get response 'choices))
+;;        (choice-list (if (vectorp choices) (append choices nil) choices))
+;;        (parts nil))
+;;   (dolist (choice choice-list)
+;;     (let* ((msg (plist-get choice 'message))
+;;            (piece (or (plist-get choice 'text)
+;;                       (concat (or (plist-get msg 'reasoning_content) "")
+;;                               (or (plist-get msg 'content) "")))))
+;;       (push piece parts)))
+;;   (if parts
+;;       (decode-coding-string (apply #'concat (nreverse parts)) 'utf-8)
+;;     (error "Fail to decode response")))
 
 ;; Here is an example for how a full sequence of OpenAI responses looks like:
 ;; '((id "chatcmpl-9hM1UJgWe4cWKcJKvoMBzzebOOzli" object "chat.completion.chunk" created 1720119788 model "gpt-4o-2024-05-13" system_fingerprint "fp_d576307f90" choices [(index 0 delta (role "assistant" content "") logprobs nil finish_reason nil)])
@@ -1108,9 +1149,8 @@ Should be executed in url-buffer only."
     (let ((http-code (url-http-symbol-value-in-buffer 'url-http-response-status (current-buffer))) ; should be integer, but may not be
           (http-data (if (and (boundp 'url-http-end-of-headers) url-http-end-of-headers)
                          ;; get data after HTTP headers from current url buffer
-                         (progn
-                           (string-trim (buffer-substring-no-properties url-http-end-of-headers
-                                                                        (point-max))))
+                         (cui-restapi--clean-unicode-text (buffer-substring-no-properties url-http-end-of-headers
+                                                                                                       (point-max)))
                        ;; else
                        ""))
           (http-header-first-line (buffer-substring-no-properties (point-min)
@@ -1181,7 +1221,8 @@ Return list of cons or nil."
   "Bound with hardcoded links in `cui-block-tags--compose-block-for-path-full'.")
 
 (defun cui-restapi--replace-multimodal (string)
-  "Replace @image/audo-format:/path in STRING with multimodal blocks."
+  "Replace @image/audo-format:/path in STRING with multimodal blocks.
+Where format is file extension"
   (let* ((items (cui-restapi--chunk-around-pattern cui-restapi--multimodal-internal-link-re string))
          ret paths desc match)
     (if (not items) ; links was not found
@@ -1224,7 +1265,7 @@ Return list of cons or nil."
 
 ;; -=-= payload
 
-(cl-defun cui-restapi--payload (&optional &key service model prompt messages max-tokens temperature top-p frequency-penalty presence-penalty stream)
+(cl-defun cui-restapi--payload (&optional &key service model prompt messages max-tokens temperature top-p frequency-penalty presence-penalty stream extra)
   "Create the payload for the OpenAI API.
 SERVICE used to get default model.
 PROMPT is string with the query for completions.
@@ -1238,11 +1279,20 @@ FREQUENCY-PENALTY is the frequency penalty.
 PRESENCE-PENALTY is the presence penalty.
 STREAM is a boolean indicating whether to stream the response.
 Return list of cons with messages as vector and with stream bool."
-  (cui--debug "cui-restapi--payload messages N1:" (pp-to-string messages))
+  (cui--debug "cui-restapi--payload messages:" (pp-to-string messages))
   (cui--debug "cui-restapi--payload service:" service)
+
   (let (extra-system-prompt
         max-completion-tokens
-        (messages (when messages (vconcat messages)))) ; enshure messages is vector
+        (messages (when messages (vconcat messages))) ; enshure messages is vector
+        (extra (or extra
+                   (cui-restapi--get-values-enhanced cui-restapi-con-request-extra
+                                                          (or service cui-restapi-con-service)))))
+    (cui--debug "cui-restapi--payload N1 extra:" extra)
+    (when (not (equal (type-of extra) 'cons))
+      (setq extra (list extra)))
+
+    (cui--debug "cui-restapi--payload N2 extra:" extra)
 
     ;; enshure that :content is vector or string
     (when messages
@@ -1288,24 +1338,55 @@ Return list of cons with messages as vector and with stream bool."
                                ,@(when temperature           `((temperature . ,temperature)))
                                ,@(when top-p                 `((top_p . ,top-p)))
                                ,@(when frequency-penalty     `((frequency_penalty . ,frequency-penalty)))
-                               ,@(when presence-penalty      `((presence_penalty . ,presence-penalty)))))))
+                               ,@(when presence-penalty      `((presence_penalty . ,presence-penalty)))
+                               ,@(when extra      `,extra)
+                               ))))
 
       (when extra-system-prompt
         (setq data (append data `((system . ,extra-system-prompt)))))
       (cui--debug "cui-restapi--payload data N2: %s" (pp-to-string data))
       data)))
 
+;; (when (not (equal (type-of (car '((:tools (("type" . "web_search") ("web_search" ("enable" . t) ("search_result" . t))))))) 'cons))
+;; (cui-restapi--payload :messages '[(:role user :content "Be a")]) => ((messages . [(:role user :content "Be a")]) (stream . :json-false))
+
+;; List may be defined by two ways:
+;; (:tools (("as" . "ss")))
+;; ("tools" . [(("as" . "ss"))])
+
+;; (princ (json-encode
+;;  (cui-restapi--payload :extra nil)))
+
+;; two parameters
+;; (princ (json-encode
+;;  (cui-restapi--payload :extra '(("var1" . "A")
+;;                                 ("var2" . "B")))))
+;; => {"prompt":null,"stream":false,"var1":"A","var2":"B"}
+
+;; one with list
+;; (princ (json-encode
+;;         (cui-restapi--payload :extra '((:tools (("type" . "web_search")
+;;                                                 ("web_search" . (("enable" . t) ("search_result" . t))))
+;;                                                )))))
+;; => {"prompt":null,"stream":false,"tools":[{"type":"web_search","web_search":{"enable":true,"search_result":true}}]}"
+
+;; (princ (json-encode
+;;  (cui-restapi--payload :extra '("var1" "A"))))
+
 (defun cui-restapi--clean-unicode-text (str)
   "Remove ASCII control chars except tab, newline, and carriage return.
+Also trim.
 Argument STR unicode multi-byte string."
-  (apply #'string
-         (seq-filter
-          (lambda (ch)
-            (or (>= ch 32) ; ; Unicode (including emoji, CJK, etc.) and printable ASCII
-                (memq ch '(?\t ?\n)) ; allow  tab, linefeed, forbid: ?\r CR
-                ))
-          (string-to-list
-           (replace-regexp-in-string "\r.*?\r" "" str))))) ; removes content between pairs of CRs, which may be too aggressive.
+  (let ((str (string-trim (decode-coding-string
+                           (encode-coding-string str 'utf-8 t) 'utf-8))))
+    (apply #'string
+           (seq-filter
+            (lambda (ch)
+              (or (>= ch 32) ; ; Unicode (including emoji, CJK, etc.) and printable ASCII
+                  (memq ch '(?\t ?\n)) ; allow  tab, linefeed, forbid: ?\r CR
+                  ))
+            (string-to-list
+             (replace-regexp-in-string "\r.*?\r" "" str)))))) ; removes content between pairs of CRs, which may be too aggressive.
 
 (defun cui-restapi--json-safe-decoding (string)
   "Decode JSON STRING to plist.
@@ -1318,9 +1399,7 @@ Return nil if error."
       (let ((json-object-type 'plist)
             (json-key-type 'symbol)
             (json-array-type 'vector)
-            (clean-text (cui-restapi--clean-unicode-text
-                         (decode-coding-string
-                          (encode-coding-string string 'utf-8 t) 'utf-8))))
+            (clean-text (cui-restapi--clean-unicode-text string)))
 
         (json-read-from-string clean-text))
     (error nil)))

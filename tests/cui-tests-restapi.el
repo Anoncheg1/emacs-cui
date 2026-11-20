@@ -288,17 +288,18 @@
       (cui-restapi--normalize-response test-val))
     '(#s(cui-block--response role "assistant") #s(cui-block--response text "It works: `(2 3 1)` is returned.") #s(cui-block--response stop "stop")))))
 
-;; -=-= For: `cui-block--response-payload'
+
+;; -=-= For: `cui-block--insert-stream-response'
 
 (ert-deftest cui-tests-restapi--response-payload ()
-  (let* ((test-val '(#s(cui-block--response role "assistant") #s(cui-block--response text "It seems ") #s(cui-block--response stop "length")))
-       (test-val0 (nth 0 test-val))
-       (test-val1 (nth 1 test-val)))
-   (should (equal (length test-val) 3))
-   (should (equal (cui-block--response-type test-val0) 'role))
-   (should (string-equal (decode-coding-string (cui-block--response-payload test-val0) 'utf-8) "assistant"))
-   (should (equal (cui-block--response-type test-val1) 'text))
-   (should (string-equal (decode-coding-string (cui-block--response-payload test-val1) 'utf-8) "It seems "))))
+  (with-temp-buffer
+    (let* ((test-val '((#s(cui-block--response role "assistant") #s(cui-block--response text "It seems ") #s(cui-block--response stop "length"))))
+           (test-val0 (nth 0 test-val))
+           (test-val1 (nth 1 test-val))
+           (m (mark-marker)))
+      (set-marker m (point) (current-buffer)) ; requred
+      (cui-block--insert-stream-response (mark-marker) test-val0)
+      (should (string-equal (buffer-string) "\n[ai]: \nIt seems ")))))
 
 ;; -=-= For: `cui-restapi--url-request-on-change-function'
 (defvar callback-n-test 0)
@@ -459,7 +460,7 @@
 
 ;; -=-= For: `cui-restapi--get-single-response-text'
 
-(ert-deftest cui-tests-restapi--get-single-response-text ()
+(ert-deftest cui-tests-restapi--get-single-response-text1 ()
   (should
    (string-equal
     (let ((test-val
@@ -468,6 +469,13 @@
                                         message (role "assistant" content " The answer is simple: live a long time. But how do you do that? Well, itâs not as simple as it sounds." tool_calls []))] usage (prompt_tokens 5 completion_tokens 150 total_tokens 155 cached_tokens 0))))
       (cui-restapi--get-single-response-text test-val))
     " The answer is simple: live a long time. But how do you do that? Well, itâs not as simple as it sounds.")))
+
+
+(ert-deftest cui-tests-restapi--get-single-response-text2 ()
+  ;; z.ai
+  (let ((response '(choices [(finish_reason "length" index 0 message (content "cont-text" reasoning_content "reasoning-text" role "assistant"))] created 1795076924 id "20261119162725094b03b8ae3b4d75" model "GLM-4.7-Flash" object "chat.completion" request_id "20261119162725094b03b8ae3b4d75" usage (completion_tokens 900 completion_tokens_details (reasoning_tokens 900) prompt_tokens 113 prompt_tokens_details (cached_tokens 2) total_tokens 1013))))
+    (should (string-equal "reasoning-text cont-text"
+                          (cui-restapi--get-single-response-text response)))))
 
 
 ;; -=-= For: `cui-restapi--collect-chat-messages' (old)
