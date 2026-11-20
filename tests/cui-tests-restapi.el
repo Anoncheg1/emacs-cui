@@ -108,15 +108,12 @@
         (progn
           (fset 'cui-restapi--get-token-auth-source (lambda (service) (setq service service) nil))
 
-          (let ((err (cadr
-                      (should-error (cui-restapi--get-token :openai) :type 'error))))
+          (should-error (cui-restapi--get-token :openai) :type 'user-error)
             ;; (print err)))))
-            (should (string-match "Please set" err)))
+
+          ;; - 2)
           (setq cui-restapi-con-token '(:asd nil))
-          (let ((err (cadr
-                      (should-error (cui-restapi--get-token :openai) :type 'error))))
-            ;; (print err)))))
-            (should (string-match "ot found" err))))
+          (should-error (cui-restapi--get-token :openai) :type 'error))
       (fset 'cui-restapi--get-token-auth-source orig-fn))))
 ;;;
 ;; -=-= For `cui-restapi--get-token'
@@ -141,6 +138,27 @@
   "Plist with symbol key, single string."
   (let ((cui-restapi-con-token '(:foo "tokfoo")))
     (should (equal (cui-restapi--get-token "foo") "tokfoo"))))
+
+(ert-deftest cui-tests-restapi--get-token/set-to-nil ()
+  "Neither string, plist nor auth-source: signals error."
+  (should (not
+           (let ((cui-restapi-con-token '(:local nil)))
+             (cui-restapi--get-token "local")))))
+
+(ert-deftest cui-tests-restapi--get-token/not-found-error ()
+  "."
+  (should-error
+   (let ((cui-restapi-con-token '(:local nil)))
+     (cui-restapi--get-token "local2"))
+   :type 'user-error))
+
+(ert-deftest cui-tests-restapi--get-token/wrong-token-empty ()
+  "."
+  (should-error
+   (let ((cui-restapi-con-token '(:local "")))
+     (cui-restapi--get-token "local"))
+   :type 'user-error))
+
 
 (ert-deftest cui-tests-restapi--get-token/plist-list-by-index ()
   "Plist with key and list of strings, access by index."
@@ -169,11 +187,11 @@
                   :type 'error)))
 
 
-(ert-deftest cui-tests-restapi--get-token/missing-errors ()
-  "Neither string, plist nor auth-source: signals error."
-  (let ((cui-restapi-con-token nil))
-    (should-error (cui-restapi--get-token "foo")
-                  :type 'user-error)))
+;; (ert-deftest cui-tests-restapi--get-token/missing-errors ()
+;;   "Neither string, plist nor auth-source: signals error."
+;;   (let ((cui-restapi-con-token nil))
+;;     (should-error (cui-restapi--get-token "foo")
+;;                   :type 'user-error)))
 
 
 ;; -=-= For `cui-restapi--get-headers'

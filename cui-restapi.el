@@ -86,7 +86,7 @@
 
 ;;; Code:
 ;; -=-= Constants, variables
-(defcustom cui-restapi-con-token nil
+(defcustom cui-restapi-con-token '(:local nil)
   "This is your OpenAI API token.
 If not-nil, store token as a string or may be as a list of key-value:
 \='(:openai token).
@@ -345,7 +345,7 @@ MODEL is the model name.  ENDPOINT is the API endpoint."
 
     (let ((lowercased (downcase model)))
       (when (and (string-prefix-p "gpt-" model) (not (string-equal lowercased model)))
-        (warn "Model name '%s' should be lowercase. Use '%s' instead." model lowercased)))
+        (warn "Model name '%s' should be lowercase.  Use '%s' instead." model lowercased)))
 
     (unless (member model cui-restapi-openai-known-chat-models)
       (message "Model '%s' is not in the list of available models. Maybe this is because of a typo or maybe we haven't yet added it to the list. To disable this message add (add-to-list 'cui-restapi-openai-known-chat-models \"%s\") to your init file." model model))))
@@ -475,8 +475,9 @@ If MESSAGES are provided, type of request is chat, otherwise completion."
      (t
       (car (cui-restapi--get-values cui-restapi-con-endpoints :openai-completion))))))
 
-(defun cui-restapi--get-headers (service)
-  "Determine the correct headers based on the SERVICE."
+(defun cui-restapi--get-headers (&optional service)
+  "Determine the correct headers based on the SERVICE.
+If SERVICE is nil `cui-restapi-con-service` is used"
   (let ((serv (if service
                   (cui-restapi--openai-service-clear-dashes service)
                 ;; else
@@ -501,27 +502,31 @@ If MESSAGES are provided, type of request is chat, otherwise completion."
 (defun cui-restapi--get-token (service)
   "Get token or errored.
 Get token from `cui-restapi-con-token' or from auth-source.
-Return nil if SERVICE exist without token, signal error if SERVICE
-not found in tokens."
-  ;; - 1) from variable
-  (let* ((token-raw (cui-restapi--get-values-enhanced cui-restapi-con-token service))
-         (token (car token-raw)))
-    (cui--debug "cui-restapi--get-token N1 %s %s" service token-raw token)
+Return nil if SERVICE exist with nil token or serive is nill, signal
+ error if SERVICE not found in tokens."
+  (when service
+    ;; - 1) from variable
+    (let* ((token-raw (cui-restapi--get-values-enhanced cui-restapi-con-token service))
+           (token (car token-raw)))
+      (cui--debug "cui-restapi--get-token N1 %s %s" service token-raw token)
 
-    ;; - 2) from auth-sources
-    (unless token-raw
-      (setq token (cui-restapi--get-token-auth-source service)))
+      ;; - 2) from auth-sources
+      (unless token-raw
+        (setq token (cui-restapi--get-token-auth-source service)))
 
-    (cui--debug "cui-restapi--get-token N2 %s %s" service token)
+      (cui--debug "cui-restapi--get-token N2 %s %s" service token)
 
-    ;; - check for correctness
-    (when (or token-raw token)
-      (when (and token
-                 (or (not (stringp token)) ; check that token is string, not number
-                     (string-empty-p token)))
-        (user-error "Token in `cui-restapi-con-token' is not string but something other, please check")))
+      ;; - check for correctness - if not found
+      (when (not (or token-raw token))
+        (user-error "Token not found for service %s in `cui-restapi-con-token'" service))
+      ;; - check for correctness - if found
+      (when (or token-raw token)
+        (when (and token
+                   (or (not (stringp token)) ; check that token is string, not number
+                       (string-empty-p token)))
+          (user-error "Token in `cui-restapi-con-token' is not string but something other, please check")))
 
-    token))
+      token)))
 
 ;; (cui-restapi--get-token "github") => first token from list
 ;; (cui-restapi--get-token "github--0") => first token from list

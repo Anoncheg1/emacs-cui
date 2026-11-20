@@ -308,12 +308,22 @@ There are ~cui-block-roles-prefixes~ variable that allow to customize roles at s
 For incoming RestAPI conversion to prefixes ~cui-block-roles-restapi~ variable used.
 
 ** Add additional parameters to JSON request body
+Use ~cui-restapi-con-request-extra~ variable.
+
+Example
+#+begin_src elisp :lexical t :results none :exports code :eval no
+(setq cui-restapi-con-request-extra
+      (plist-put cui-restapi-con-request-extra :zai '((:tools (("type" . "web_search")
+                                                       ("web_search" . (("enable" . t) ("search_result" . t))))
+                                                      ))))
+#+end_src
 
 List may be defined by two ways:
 : (:tools (("as" . "ss")))
 : ("tools" . [(("as" . "ss"))])
 
-Two examples:
+
+Two examples with testing of parsing:
 #+begin_src elisp :lexical t :results none :exports code :eval no
 ;; two parameters
 (princ (json-encode
@@ -327,8 +337,8 @@ Two examples:
                                                 ("web_search" . (("enable" . t) ("search_result" . t))))
                                                )))))
 ;; => {"prompt":null,"stream":false,"tools":[{"type":"web_search","web_search":{"enable":true,"search_result":true}}]}"
-
 #+end_src
+
 ** Elisp: Get content of block
 : (cui-block-tags-get-content-main)
 Or
