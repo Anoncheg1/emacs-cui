@@ -347,7 +347,7 @@ Return string or vector."
     ;; else - chat - vector
     (let* ((max-tokens-recommendation (when (and max-tokens cui-restapi-add-max-tokens-recommendation)
                                         (cui-restapi--get-length-recommendation max-tokens))) ; may be nil
-           (sys-prompt (if max-tokens-recommendation
+           (sys-prompt (if (and max-tokens-recommendation sys-prompt) ; sys-prompt should be at least ""
                            (concat sys-prompt " " max-tokens-recommendation)
                          ;; else
                          sys-prompt)))

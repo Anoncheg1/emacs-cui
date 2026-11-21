@@ -193,6 +193,7 @@ This is what costs money."
   "If non-nil, add to system recomendation about max-token.
 It is recommeded to explicitly repeat to LLM information, such as
 max-token limit.
+Added only if system prompt is non-nil.
 Function `cui-restapi--get-length-recommendation' is used to create
 prompt."
   :type 'boolean
