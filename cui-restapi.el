@@ -644,10 +644,17 @@ Return text of message."
            (choice-list (if (vectorp choices) (append choices nil) choices)) ; Convert vector to list if needed; keep list as-is
            (parts nil))                                                    ; Accumulator list for extracted strings
       (dolist (choice choice-list)
-        (when-let ((msg (plist-get choice 'message)))                             ; Extract `message` plist from current choice
-          (push (plist-get choice 'text) parts)                         ;  completions API
-          (push (plist-get msg 'reasoning_content) parts)
-          (push (plist-get msg 'content) parts)))                       ; Push raw string (or nil) onto `parts`
+        (let ((msg (plist-get choice 'message)))                             ; Extract `message` plist from current choice
+          (when msg
+            (push (plist-get choice 'text) parts)                         ;   Legacy Text Completions (/v1/completions)
+            (push (plist-get msg 'reasoning_content) parts)               ; Push raw string (or nil) onto `parts`
+
+            (let ((content (plist-get msg 'content)))
+              (when content
+                (if (stringp content)
+                    (push (plist-get msg 'content) parts)               ; standard for /v1/chat/completions
+                  ;; else
+                  (plist-get content 'text)))))))                      ; OpenAI: Responses API & Open Responses (/v1/responses)
 
       (delq nil parts)                                                ; delete nil element, mutate parts
       (if parts                                                       ; Ensure at least one non-nil string part exists
@@ -655,7 +662,7 @@ Return text of message."
                      (mapcar (lambda (part)                                     ; Map UTF-8 decoding over each item in `parts`
                                (if part (decode-coding-string part 'utf-8) "")) ; Decode non-nil part, or map nil to empty string
                              (nreverse parts))
-                     " ")
+                     "\n---\n")
         ;; else
         (error "Fail to decode response")))))                              ; Signal an error if `parts` is empty/nil
 
@@ -1294,6 +1301,7 @@ Return list of cons with messages as vector and with stream bool."
                    (cui-restapi--get-values-enhanced cui-restapi-con-request-extra
                                                           (or service cui-restapi-con-service)))))
     (cui--debug "cui-restapi--payload N1 extra:" extra)
+    ;; fix extra to list of list
     (when (not (equal (type-of extra) 'cons))
       (setq extra (list extra)))
 
@@ -1344,8 +1352,7 @@ Return list of cons with messages as vector and with stream bool."
                                ,@(when top-p                 `((top_p . ,top-p)))
                                ,@(when frequency-penalty     `((frequency_penalty . ,frequency-penalty)))
                                ,@(when presence-penalty      `((presence_penalty . ,presence-penalty)))
-                               ,@(when extra      `,extra)
-                               ))))
+                               ,@(when extra      `,extra)))))
 
       (when extra-system-prompt
         (setq data (append data `((system . ,extra-system-prompt)))))

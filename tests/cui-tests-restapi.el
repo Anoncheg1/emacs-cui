@@ -501,9 +501,10 @@
 
 (ert-deftest cui-tests-restapi--get-single-response-text2 ()
   ;; z.ai
-  (let ((response '(choices [(finish_reason "length" index 0 message (content "cont-text" reasoning_content "reasoning-text" role "assistant"))] created 1795076924 id "20261119162725094b03b8ae3b4d75" model "GLM-4.7-Flash" object "chat.completion" request_id "20261119162725094b03b8ae3b4d75" usage (completion_tokens 900 completion_tokens_details (reasoning_tokens 900) prompt_tokens 113 prompt_tokens_details (cached_tokens 2) total_tokens 1013))))
-    (should (string-equal "reasoning-text cont-text"
-                          (cui-restapi--get-single-response-text response)))))
+  (should (string-equal
+           (let ((response '(choices [(finish_reason "length" index 0 message (content "cont-text" reasoning_content "reasoning-text" role "assistant"))] created 1795076924 id "20261119162725094b03b8ae3b4d75" model "GLM-4.7-Flash" object "chat.completion" request_id "20261119162725094b03b8ae3b4d75" usage (completion_tokens 900 completion_tokens_details (reasoning_tokens 900) prompt_tokens 113 prompt_tokens_details (cached_tokens 2) total_tokens 1013))))
+             (cui-restapi--get-single-response-text response))
+             "reasoning-text\n---\ncont-text")))
 
 
 ;; -=-= For: `cui-restapi--collect-chat-messages' (old)
