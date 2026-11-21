@@ -654,7 +654,7 @@ Return text of message."
                 (if (stringp content)
                     (push (plist-get msg 'content) parts)               ; standard for /v1/chat/completions
                   ;; else
-                  (plist-get content 'text)))))))                      ; OpenAI: Responses API & Open Responses (/v1/responses)
+                  (push (plist-get content 'text) parts)))))))                      ; OpenAI: Responses API & Open Responses (/v1/responses)
 
       (delq nil parts)                                                ; delete nil element, mutate parts
       (if parts                                                       ; Ensure at least one non-nil string part exists
